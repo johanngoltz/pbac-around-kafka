@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="kafka_2.13-3.2.0-SNAPSHOT">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/../../kafka/core/build/libs/kafka_2.13-3.2.0-SNAPSHOT.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
