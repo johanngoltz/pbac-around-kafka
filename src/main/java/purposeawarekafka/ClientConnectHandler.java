@@ -1,4 +1,5 @@
-import lombok.AllArgsConstructor;
+package purposeawarekafka;
+
 import lombok.RequiredArgsConstructor;
 
 import java.nio.ByteBuffer;
@@ -21,6 +22,7 @@ public class ClientConnectHandler implements CompletionHandler<AsynchronousSocke
 	 */
 	@Override
 	public void completed(AsynchronousSocketChannel clientChannel, Void attachment) {
+		System.out.println("Connected");
 		if (serverChannel.isOpen()) serverChannel.accept(null, this);
 
 		if (clientChannel != null && clientChannel.isOpen()) {

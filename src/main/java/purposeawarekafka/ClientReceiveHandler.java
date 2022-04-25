@@ -1,13 +1,11 @@
+package purposeawarekafka;
+
 import lombok.RequiredArgsConstructor;
-import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.common.network.PlaintextTransportLayer;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;

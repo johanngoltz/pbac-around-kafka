@@ -1,7 +1,6 @@
+package purposeawarekafka;
+
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.AsynchronousServerSocketChannel;
 import java.util.concurrent.ExecutionException;
 
 public class PurposeAwareKafka {
