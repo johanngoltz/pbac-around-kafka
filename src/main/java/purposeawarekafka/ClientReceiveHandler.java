@@ -30,9 +30,11 @@ public class ClientReceiveHandler implements CompletionHandler<Integer, ByteBuff
 			final var reqHeader = parseAndPrintRequest(buffer);
 			buffer.rewind();
 			try {
-				kafkaChannel.write(buffer).get();
-				buffer.clear();
-				kafkaChannel.read(buffer).get();
+				synchronized (kafkaChannel) {
+					kafkaChannel.write(buffer).get();
+					buffer.clear();
+					kafkaChannel.read(buffer).get();
+				}
 
 				final var originalResponse = parseAndPrintResponse(buffer, reqHeader);
 				if (purposes.isRequestPurposeRelevant(reqHeader)) {
