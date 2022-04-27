@@ -1,27 +1,27 @@
 package purposeawarekafka;
 
+import com.github.terma.javaniotcpproxy.StaticTcpProxyConfig;
+import com.github.terma.javaniotcpproxy.TcpProxyConnector;
+import com.github.terma.javaniotcpserver.TcpServer;
+import com.github.terma.javaniotcpserver.TcpServerConfig;
+
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.channels.AsynchronousServerSocketChannel;
-import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.ExecutionException;
 
 public class Server implements Runnable {
-	private final AsynchronousServerSocketChannel serverChannel;
-	private final AsynchronousSocketChannel kafkaChannel;
+
+	private final TcpServer tcpServer;
 
 	public Server() throws IOException, ExecutionException, InterruptedException {
-		this.serverChannel = AsynchronousServerSocketChannel
-				.open()
-				.bind(new InetSocketAddress("0.0.0.0", 9002));
-		this.kafkaChannel = AsynchronousSocketChannel.open();
-		kafkaChannel.connect(new InetSocketAddress("localhost", 9092)).get();
-		System.out.println("Server instantiated");
+		final var config = new StaticTcpProxyConfig(9002, "localhost", 9092, 1);
+		this.tcpServer = new TcpServer(new TcpServerConfig(
+				9002,
+				clientChannel -> new TcpProxyConnector(clientChannel, config),
+				1));
 	}
 
 	@Override
 	public void run() {
-		serverChannel.accept(null, new ClientConnectHandler(serverChannel, kafkaChannel, new Purposes()));
-		System.out.println("Server running");
+		tcpServer.start();
 	}
 }
