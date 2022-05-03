@@ -22,6 +22,7 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
+import purposeawarekafka.PurposeStore;
 import purposeawarekafka.Purposes;
 
 import java.io.IOException;
@@ -45,15 +46,18 @@ public class TcpProxyConnector implements TcpServerHandler {
 	private final SocketChannel clientChannel;
 
 	private final Map<Integer, RequestHeader> requestHeaders = new HashMap<>();
-	private final Purposes purposes = new Purposes();
+	private final Purposes purposes;
 
 	private Selector selector;
 	private SocketChannel serverChannel;
 	private TcpProxyConfig config;
+	private final PurposeStore purposeStore;
 
-	public TcpProxyConnector(SocketChannel clientChannel, TcpProxyConfig config) {
+	public TcpProxyConnector(SocketChannel clientChannel, TcpProxyConfig config, PurposeStore purposeStore) {
 		this.clientChannel = clientChannel;
 		this.config = config;
+		this.purposeStore = purposeStore;
+		purposes = new Purposes(this.purposeStore);
 	}
 
 	public void readFromClient(SelectionKey key) throws IOException {
@@ -83,21 +87,24 @@ public class TcpProxyConnector implements TcpServerHandler {
 			buffer.position(position + 4);
 			final var response = AbstractResponse.parseResponse(buffer, requestHeader);
 
-			System.out.println("Kafka: " + response + "→ Client");
+			if (!requestHeader.clientId().startsWith("pbac-")) {
+				System.out.println(requestHeader.clientId());
+				System.out.println("Kafka: " + response + "→ Client");
+			}
 
 			buffer.position(position);
 
 			if (purposes.isRequestPurposeRelevant(requestHeader)) {
-				final var compliantResponse = purposes.makeResponsePurposeCompliant(response);
+				purposes.makeResponsePurposeCompliant(requestHeader, response);
 				final var bytesWritten =
-						compliantResponse.toSend(responseHeader, requestHeader.apiVersion()).writeTo(new PlaintextTransportLayer(key));
+						response.toSend(responseHeader, requestHeader.apiVersion()).writeTo(new PlaintextTransportLayer(key));
 				buffer.position((int) (buffer.position() + bytesWritten));
 
 			} else {
 				clientBuffer.writeTo(clientChannel);
 			}
 		} else {
-			System.out.println("buffer exhausted");
+			//System.out.println("buffer exhausted");
 			clientBuffer.writeTo(clientChannel);
 		}
 		if (clientBuffer.isReadyToWrite()) register();
@@ -108,7 +115,8 @@ public class TcpProxyConnector implements TcpServerHandler {
 		buffer.position(buffer.position() + 4);
 		final var reqHeader = RequestHeader.parse(buffer);
 		final var request = AbstractRequest.parseRequest(reqHeader.apiKey(), reqHeader.apiVersion(), buffer);
-		System.out.println("Client: " + request.request + " → Kafka");
+		if (!reqHeader.clientId().startsWith("pbac-"))
+			System.out.println("Client: " + request.request + " → Kafka");
 		return reqHeader;
 	}
 

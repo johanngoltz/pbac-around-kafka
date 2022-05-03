@@ -7,6 +7,7 @@ import net.thisptr.jackson.jq.BuiltinFunctionLoader;
 import net.thisptr.jackson.jq.JsonQuery;
 import net.thisptr.jackson.jq.Scope;
 import net.thisptr.jackson.jq.Versions;
+import org.apache.commons.io.input.CharSequenceReader;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -20,17 +21,22 @@ public class jq {
 		BuiltinFunctionLoader.getInstance().loadFunctions(Versions.JQ_1_6, rootScope);
 	}
 
-	public boolean evaluate(String condition, Reader json) throws IOException {
+	public boolean evaluateToBool(String jqFilter, Reader json) throws IOException {
 		try {
-			final var childScope = Scope.newChildScope(rootScope);
-			final var query = JsonQuery.compile(condition, Versions.JQ_1_6);
-			final var tree = objectMapper.readTree(json);
-			final var results = new LinkedList<JsonNode>();
-			query.apply(childScope, tree, results::add);
-			assert results.get(0).isBoolean();
-			return results.get(0).booleanValue();
+			final var result = evaluate(jqFilter, json);
+			assert result.isBoolean();
+			return result.booleanValue();
 		} catch (JsonParseException ex) {
 			return false;
 		}
+	}
+
+	public JsonNode evaluate(String jqFilter, Reader json) throws IOException {
+		final var childScope = Scope.newChildScope(rootScope);
+		final var query = JsonQuery.compile(jqFilter, Versions.JQ_1_6);
+		final var tree = objectMapper.readTree(json);
+		final var results = new LinkedList<JsonNode>();
+		query.apply(childScope, tree, results::add);
+		return results.get(0);
 	}
 }

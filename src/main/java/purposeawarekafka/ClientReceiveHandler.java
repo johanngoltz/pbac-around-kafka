@@ -38,9 +38,9 @@ public class ClientReceiveHandler implements CompletionHandler<Integer, ByteBuff
 
 				final var originalResponse = parseAndPrintResponse(buffer, reqHeader);
 				if (purposes.isRequestPurposeRelevant(reqHeader)) {
-					final var compliantResponse = purposes.makeResponsePurposeCompliant(originalResponse.body);
+					/*final var compliantResponse = purposes.makeResponsePurposeCompliant(reqHeader, originalResponse.body);
 					final var send = compliantResponse.toSend(originalResponse.header, reqHeader.apiVersion());
-					// todo write to buffer
+					// todo write to buffer*/
 				}
 				buffer.flip();
 				clientChannel.write(buffer).get();

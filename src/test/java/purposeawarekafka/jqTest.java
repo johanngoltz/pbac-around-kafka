@@ -15,7 +15,7 @@ public class jqTest {
 	}
 	@Test
 	public void test() throws Exception{
-		assertTrue(cut.evaluate(".a == 5", new CharSequenceReader("{\"a\":5}")));
-		assertFalse(cut.evaluate(".a > 5", new CharSequenceReader("{\"a\":5}")));
+		assertTrue(cut.evaluateToBool(".a == 5", new CharSequenceReader("{\"a\":5}")));
+		assertFalse(cut.evaluateToBool(".a > 5", new CharSequenceReader("{\"a\":5}")));
 	}
 }
