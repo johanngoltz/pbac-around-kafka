@@ -2,21 +2,25 @@ package purposeawarekafka;
 
 import kafka.Kafka;
 import kafka.cluster.EndPoint;
+import kafka.network.RequestChannel;
 import kafka.security.CredentialProvider;
-import kafka.server.KafkaConfig;
-import kafka.server.SimpleApiVersionManager;
+import kafka.server.*;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.Time;
+import scala.NotImplementedError;
 import scala.Option;
+import scala.collection.Map$;
 import scala.collection.Seq;
 import scala.collection.Seq$;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 public class PurposeAwareKafka {
@@ -41,7 +45,22 @@ public class PurposeAwareKafka {
 		final var socketServer = new kafka.network.SocketServer(config, metrics, time, credentialProvider,
 				apiVersionManager);
 
-		socketServer.startup(true, Option.empty(), config.dataPlaneListeners());
+
+		socketServer.startup(false, Option.empty(), config.dataPlaneListeners());
+
+		final var requestHandlerPool = new KafkaRequestHandlerPool(-1,
+				socketServer.dataPlaneRequestChannel(),
+				new ForwardingApiRequestHandler(socketServer.dataPlaneRequestChannel(),
+						config,
+						time,
+						metrics,
+						MetadataCache.zkMetadataCache(config.brokerId())),
+				time,
+				1,
+				"metricNameAvgIdle",
+				"handler");
+
+		socketServer.startProcessingRequests((scala.collection.Map<Endpoint, CompletableFuture<Void>>) Map$.MODULE$.empty());
 
 		System.in.read();
 	}
