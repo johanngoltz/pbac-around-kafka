@@ -3,18 +3,17 @@ package purposeawarekafka
 import kafka.network.RequestChannel
 import kafka.server._
 import kafka.utils.Logging
-import lombok.extern.slf4j.Slf4j
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{ApiVersionsRequest, MetadataRequest}
+import org.apache.kafka.common.requests.{AbstractRequest, ApiVersionsRequest, FindCoordinatorRequest, JoinGroupRequest, LeaveGroupRequest, MetadataRequest, SyncGroupRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.Time
 
 class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config: KafkaConfig, time: Time, metrics: Metrics, metadataCache: MetadataCache) extends ApiRequestHandler with Logging {
     //private val log = org.slf4j.LoggerFactory.getLogger(classOf[ForwardingApiRequestHandler])
 
-    val requestHelper = new RequestHandlerHelper(requestChannel, QuotaFactory.instantiate(config, metrics, time, "quotaprefix") , time)
+    val requestHelper = new RequestHandlerHelper(requestChannel, QuotaFactory.instantiate(config, metrics, time, "quotaprefix"), time)
     val forwarder = new ProxyToBrokerChannelManager(
         MetadataCacheControllerNodeProvider(config, metadataCache),
         time,
@@ -23,18 +22,39 @@ class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config
         "ChannelName",
         Option("Prefix"),
         config.requestTimeoutMs.longValue)
+    forwarder.start()
 
     def forward(request: RequestChannel.Request): Unit = {
+        request.buffer
         val newRequest = request.header.apiKey match {
             case ApiKeys.API_VERSIONS => new ApiVersionsRequest.Builder()
             case ApiKeys.METADATA => new MetadataRequest.Builder(request.body[MetadataRequest].data)
+            case ApiKeys.FIND_COORDINATOR => new FindCoordinatorRequest.Builder(request.body[FindCoordinatorRequest].data)
+            case ApiKeys.JOIN_GROUP => new IdentityReturner(request.body[JoinGroupRequest])
+            case ApiKeys.SYNC_GROUP => new IdentityReturner(request.body[AbstractRequest])
+            case ApiKeys.LEAVE_GROUP => new IdentityReturner(request.body[LeaveGroupRequest])
+            case ApiKeys.OFFSET_FETCH => new IdentityReturner(request.body[AbstractRequest])
+            case ApiKeys.LIST_OFFSETS => new IdentityReturner(request.body[AbstractRequest])
+            case ApiKeys.FETCH => new IdentityReturner(request.body[AbstractRequest])
+            case ApiKeys.HEARTBEAT => new IdentityReturner(request.body[AbstractRequest])
+            // can also just use NotABuilder directly
+            /*case ApiKeys.UPDATE_METADATA => {
+                val data = request.body[UpdateMetadataRequest].data
+                new UpdateMetadataRequest.Builder(request.header.apiVersion, data.controllerId, data.controllerEpoch, data.brokerEpoch,
+            }*/
             case _ => throw new NotImplementedError(s"ApiKey ${request.header.apiKey} is not handled")
         }
         forwarder.sendRequest(newRequest, new ControllerRequestCompletionHandler {
             override def onTimeout(): Unit = ???
 
-            override def onComplete(response: ClientResponse): Unit =
-                requestChannel.sendResponse(request, response.responseBody, Option.empty)
+            override def onComplete(response: ClientResponse): Unit = {
+                try {
+                    requestChannel.sendResponse(request, response.responseBody, Option.empty) // this is hit with the same request instance over and over again, but why? should only be called once!
+                } catch {
+                    case e: Throwable =>
+                        e.printStackTrace()
+                }
+            }
         })
     }
 

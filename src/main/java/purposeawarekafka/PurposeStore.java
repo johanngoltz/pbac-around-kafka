@@ -26,7 +26,7 @@ public class PurposeStore implements Runnable {
 	public PurposeStore() {
 		final var props = new Properties();
 		props.put(StreamsConfig.APPLICATION_ID_CONFIG, "pbac");
-		props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+		props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9093");
 		props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 		props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
@@ -51,7 +51,6 @@ public class PurposeStore implements Runnable {
 		return result;
 	}
 
-	@SneakyThrows
 	@Override
 	public void run() {
 		final var latch = new CountDownLatch(1);
@@ -65,7 +64,11 @@ public class PurposeStore implements Runnable {
 			}
 		});
 
-		streams.start();
-		latch.await();
+		try {
+			streams.start();
+			latch.await();
+		} catch (Throwable e) {
+			streams.close();
+		}
 	}
 }

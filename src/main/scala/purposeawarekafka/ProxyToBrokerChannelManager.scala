@@ -100,7 +100,12 @@ class ProxyToBrokerChannelManager(controllerNodeProvider: ControllerNodeProvider
             }
 
             override def handleResponse(queueItem: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
-                queueItem.callback.onComplete(response)
+                // todo refer to super()
+                if (response.authenticationException == null && response.versionMismatch == null && !response.wasDisconnected) {
+                    queueItem.callback.onComplete(response)
+                } else {
+                    error(s"Request ${queueItem.request} failed!")
+                }
             }
 
             override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
@@ -108,9 +113,10 @@ class ProxyToBrokerChannelManager(controllerNodeProvider: ControllerNodeProvider
                 val requestIter = requestQueue.iterator()
                 while (requestIter.hasNext) {
                     val request = requestIter.next
+                    requestIter.remove()
                     return Some(RequestAndCompletionHandler(
                         time.milliseconds,
-                        new Node(-1, "localhost", 9093),
+                        new Node(-1, "localhost", 9092),
                         request.request,
                         handleResponse(request)))
                 }

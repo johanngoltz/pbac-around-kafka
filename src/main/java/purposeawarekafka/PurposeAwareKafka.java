@@ -28,8 +28,8 @@ public class PurposeAwareKafka {
 	private static final Time time = Time.SYSTEM;
 
 	public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
-		final var purposeStore = new PurposeStore();
-		new Thread(purposeStore).start();
+		/*final var purposeStore = new PurposeStore();
+		new Thread(purposeStore).start();*/
 		// new Thread(new Server(purposeStore)).start();
 
 		final var properties = Kafka.getPropsFromArgs(args);
@@ -40,7 +40,7 @@ public class PurposeAwareKafka {
 		final var tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames());
 		final var credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames(), tokenCache);
 
-		final var apiVersionManager = new SimpleApiVersionManager(ApiMessageType.ListenerType.BROKER);
+		final var apiVersionManager = new SimpleApiVersionManager(ApiMessageType.ListenerType.ZK_BROKER);
 
 		final var socketServer = new kafka.network.SocketServer(config, metrics, time, credentialProvider,
 				apiVersionManager);

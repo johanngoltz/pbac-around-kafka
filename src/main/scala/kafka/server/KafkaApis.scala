@@ -74,6 +74,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         "ChannelName",
         Option("Prefix"),
         config.requestTimeoutMs.longValue)
+    forwarder.start()
 
     override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
         try {
