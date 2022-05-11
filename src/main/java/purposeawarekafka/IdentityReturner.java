@@ -16,4 +16,11 @@ public class IdentityReturner<T extends AbstractRequest> extends AbstractRequest
 		// ignore requested apiVersion
 		return toReturn;
 	}
+
+	@Override
+	public String toString() {
+		return "IdentityReturner{" +
+				"toReturn=" + toReturn +
+				'}';
+	}
 }
