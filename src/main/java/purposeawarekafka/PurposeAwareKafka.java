@@ -28,8 +28,10 @@ public class PurposeAwareKafka {
 	private static final Time time = Time.SYSTEM;
 
 	public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
-		/*final var purposeStore = new PurposeStore();
-		new Thread(purposeStore).start();*/
+		final var purposeStore = new PurposeStore();
+		final var purposes = new Purposes(purposeStore);
+		new Thread(purposeStore).start();
+
 		// new Thread(new Server(purposeStore)).start();
 
 		final var properties = Kafka.getPropsFromArgs(args);
@@ -54,7 +56,8 @@ public class PurposeAwareKafka {
 						config,
 						time,
 						metrics,
-						MetadataCache.zkMetadataCache(config.brokerId())),
+						MetadataCache.zkMetadataCache(config.brokerId()),
+						purposes),
 				time,
 				1,
 				"metricNameAvgIdle",

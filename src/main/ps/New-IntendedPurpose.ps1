@@ -16,4 +16,4 @@ param (
 
 $iso8601Ts = Get-Date -Format FileDateTimeUniversal
 $json = ConvertTo-Json -Compress @{userId = $UserId; topic = $TopicName; purpose = $IntendedPurpose; condition = $Condition}
-"$TopicName`$$UserId`$$iso8601Ts`t$json" | ./kafka-console-producer --topic 'reservations' --bootstrap-server localhost:9092 --property parse.key=true
+"$TopicName`$$UserId`$$iso8601Ts`t$json" | ./kafka-console-producer --topic 'reservations' --bootstrap-server localhost:9093 --property parse.key=true

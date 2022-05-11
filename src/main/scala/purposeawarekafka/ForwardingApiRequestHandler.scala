@@ -6,13 +6,10 @@ import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{AbstractRequest, ApiVersionsRequest, FindCoordinatorRequest, JoinGroupRequest, LeaveGroupRequest, MetadataRequest, SyncGroupRequest, UpdateMetadataRequest}
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 
-class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config: KafkaConfig, time: Time, metrics: Metrics, metadataCache: MetadataCache) extends ApiRequestHandler with Logging {
-    //private val log = org.slf4j.LoggerFactory.getLogger(classOf[ForwardingApiRequestHandler])
-
+class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config: KafkaConfig, time: Time, metrics: Metrics, metadataCache: MetadataCache, purposes: Purposes) extends ApiRequestHandler with Logging {
     val requestHelper = new RequestHandlerHelper(requestChannel, QuotaFactory.instantiate(config, metrics, time, "quotaprefix"), time)
     val forwarder = new ProxyToBrokerChannelManager(
         MetadataCacheControllerNodeProvider(config, metadataCache),
@@ -25,7 +22,8 @@ class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config
     forwarder.start()
 
     def forward(request: RequestChannel.Request): Unit = {
-        request.buffer
+        val newRequest = new IdentityReturner(request.body[AbstractRequest])
+        /*
         val newRequest = request.header.apiKey match {
             case ApiKeys.API_VERSIONS => new ApiVersionsRequest.Builder()
             case ApiKeys.METADATA => new MetadataRequest.Builder(request.body[MetadataRequest].data)
@@ -43,17 +41,14 @@ class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config
                 new UpdateMetadataRequest.Builder(request.header.apiVersion, data.controllerId, data.controllerEpoch, data.brokerEpoch,
             }*/
             case _ => throw new NotImplementedError(s"ApiKey ${request.header.apiKey} is not handled")
-        }
+        }*/
         forwarder.sendRequest(newRequest, new ControllerRequestCompletionHandler {
             override def onTimeout(): Unit = ???
 
             override def onComplete(response: ClientResponse): Unit = {
-                try {
-                    requestChannel.sendResponse(request, response.responseBody, Option.empty) // this is hit with the same request instance over and over again, but why? should only be called once!
-                } catch {
-                    case e: Throwable =>
-                        e.printStackTrace()
-                }
+                if (purposes.isRequestPurposeRelevant(request.header))
+                    purposes.makeResponsePurposeCompliant(request.header, response.responseBody)
+                requestChannel.sendResponse(request, response.responseBody, Option.empty)
             }
         })
     }
