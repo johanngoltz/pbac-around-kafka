@@ -1,38 +1,31 @@
 package purposeawarekafka;
 
 import kafka.Kafka;
-import kafka.cluster.EndPoint;
-import kafka.network.RequestChannel;
 import kafka.security.CredentialProvider;
-import kafka.server.*;
+import kafka.server.KafkaConfig;
+import kafka.server.KafkaRequestHandlerPool;
+import kafka.server.MetadataCache;
+import kafka.server.SimpleApiVersionManager;
+import lombok.SneakyThrows;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.Time;
-import scala.NotImplementedError;
 import scala.Option;
 import scala.collection.Map$;
-import scala.collection.Seq;
-import scala.collection.Seq$;
 
-import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 public class PurposeAwareKafka {
 
 	private static final Time time = Time.SYSTEM;
 
-	public static void main(String[] args) throws IOException, ExecutionException, InterruptedException {
+	@SneakyThrows // todo remove
+	public static void main(String[] args) {
 		final var purposeStore = new PurposeStore();
 		final var purposes = new Purposes(purposeStore);
 		new Thread(purposeStore).start();
-
-		// new Thread(new Server(purposeStore)).start();
 
 		final var properties = Kafka.getPropsFromArgs(args);
 		final var config = KafkaConfig.fromProps(properties, false);

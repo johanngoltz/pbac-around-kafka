@@ -57,6 +57,11 @@
                     <descriptorRefs>
                         <descriptorRef>jar-with-dependencies</descriptorRef>
                     </descriptorRefs>
+                    <archive>
+                        <manifest>
+                            <mainClass>purposeawarekafka.PurposeAwareKafka</mainClass>
+                        </manifest>
+                    </archive>
                 </configuration>
 
                 <executions>

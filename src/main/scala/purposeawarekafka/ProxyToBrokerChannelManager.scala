@@ -116,7 +116,7 @@ class ProxyToBrokerChannelManager(controllerNodeProvider: ControllerNodeProvider
                     requestIter.remove()
                     return Some(RequestAndCompletionHandler(
                         time.milliseconds,
-                        new Node(-1, "localhost", 9092),
+                        new Node(-1, "kafka", 9092),
                         request.request,
                         handleResponse(request)))
                 }
