@@ -58,9 +58,8 @@ public class IntegrationTest {
 	}
 
 	private String getProxyHost() {
-		return "localhost:9093";/*
 		return "%s:%d".formatted(
 				compose.getServiceHost("pbac", 9093),
-				compose.getServicePort("pbac", 9093));*/
+				compose.getServicePort("pbac", 9093));
 	}
 }
