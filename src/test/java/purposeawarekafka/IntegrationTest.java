@@ -52,7 +52,7 @@ public class IntegrationTest {
 						null)
 				.start();
 
-		assertTrue(latch.await(10, SECONDS));
+		assertTrue(latch.await(100, SECONDS));
 	}
 
 }
