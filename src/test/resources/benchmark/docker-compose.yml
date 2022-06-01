@@ -23,3 +23,6 @@ services:
     image: pbac-around-kafka:latest
     ports:
       - "9093:9093"
+    environment:
+      - PBAC_CFG_MODE=NONE
+      - max.in.flight.requests.per.connection=100

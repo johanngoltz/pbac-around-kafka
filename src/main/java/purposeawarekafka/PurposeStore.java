@@ -65,7 +65,7 @@ public class PurposeStore implements Runnable {
 		});
 
 		try {
-			streams.start();
+			// streams.start();
 			latch.await();
 		} catch (Throwable e) {
 			streams.close();

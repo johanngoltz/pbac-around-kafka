@@ -64,11 +64,14 @@ class ProxyToBrokerChannelManager(controllerNodeProvider: ControllerNodeProvider
             logContext
         )
 
+        val inflightRequestsFromEnv = System.getenv("max.in.flight.requests.per.connection")
+        val inflightRequests = if(inflightRequestsFromEnv == null) 100 else inflightRequestsFromEnv.toInt
+
         val networkClient = new NetworkClient(
             selector,
             manualMetadataUpdater,
             config.brokerId.toString,
-            1,
+            inflightRequests,
             50,
             50,
             Selectable.USE_DEFAULT_BUFFER_SIZE,
@@ -109,7 +112,6 @@ class ProxyToBrokerChannelManager(controllerNodeProvider: ControllerNodeProvider
             }
 
             override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
-                // val currentTimeMs = time.milliseconds
                 val requestIter = requestQueue.iterator()
                 while (requestIter.hasNext) {
                     val request = requestIter.next

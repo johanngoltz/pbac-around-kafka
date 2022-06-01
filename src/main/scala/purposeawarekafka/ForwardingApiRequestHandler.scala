@@ -20,37 +20,35 @@ class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config
         Option("Prefix"),
         config.requestTimeoutMs.longValue)
     forwarder.start()
+    val clazz = if (System.getenv("PBAC_CFG_MODE").equals("NONE")) {
+        (request: RequestChannel.Request) => new NoopHandler(request)
+    } else {
+        (request: RequestChannel.Request) => new FilteringHandler(request)
+    }
 
     def forward(request: RequestChannel.Request): Unit = {
         val newRequest = new IdentityReturner(request.body[AbstractRequest])
-        /*
-        val newRequest = request.header.apiKey match {
-            case ApiKeys.API_VERSIONS => new ApiVersionsRequest.Builder()
-            case ApiKeys.METADATA => new MetadataRequest.Builder(request.body[MetadataRequest].data)
-            case ApiKeys.FIND_COORDINATOR => new FindCoordinatorRequest.Builder(request.body[FindCoordinatorRequest].data)
-            case ApiKeys.JOIN_GROUP => new IdentityReturner(request.body[JoinGroupRequest])
-            case ApiKeys.SYNC_GROUP => new IdentityReturner(request.body[AbstractRequest])
-            case ApiKeys.LEAVE_GROUP => new IdentityReturner(request.body[LeaveGroupRequest])
-            case ApiKeys.OFFSET_FETCH => new IdentityReturner(request.body[AbstractRequest])
-            case ApiKeys.LIST_OFFSETS => new IdentityReturner(request.body[AbstractRequest])
-            case ApiKeys.FETCH => new IdentityReturner(request.body[AbstractRequest])
-            case ApiKeys.HEARTBEAT => new IdentityReturner(request.body[AbstractRequest])
-            // can also just use NotABuilder directly
-            /*case ApiKeys.UPDATE_METADATA => {
-                val data = request.body[UpdateMetadataRequest].data
-                new UpdateMetadataRequest.Builder(request.header.apiVersion, data.controllerId, data.controllerEpoch, data.brokerEpoch,
-            }*/
-            case _ => throw new NotImplementedError(s"ApiKey ${request.header.apiKey} is not handled")
-        }*/
-        forwarder.sendRequest(newRequest, new ControllerRequestCompletionHandler {
-            override def onTimeout(): Unit = ???
+        forwarder.sendRequest(newRequest, clazz(request))
+    }
 
-            override def onComplete(response: ClientResponse): Unit = {
-                if (purposes.isRequestPurposeRelevant(request.header))
-                    purposes.makeResponsePurposeCompliant(request.header, response.responseBody)
-                requestChannel.sendResponse(request, response.responseBody, Option.empty)
-            }
-        })
+    class FilteringHandler(val request: RequestChannel.Request) extends ControllerRequestCompletionHandler {
+        override def onTimeout(): Unit = ???
+
+        override def onComplete(response: ClientResponse): Unit = {
+            // info("Filtering")
+            if (purposes.isRequestPurposeRelevant(request.header))
+                purposes.makeResponsePurposeCompliant(request.header, response.responseBody)
+            requestChannel.sendResponse(request, response.responseBody, Option.empty)
+        }
+    }
+
+    class NoopHandler(val request: RequestChannel.Request) extends ControllerRequestCompletionHandler {
+        override def onTimeout(): Unit = ???
+
+        override def onComplete(response: ClientResponse): Unit = {
+            // info("Just forwarding")
+            requestChannel.sendResponse(request, response.responseBody, Option.empty)
+        }
     }
 
     override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
@@ -74,4 +72,5 @@ class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config
                 request.apiLocalCompleteTimeNanos = time.nanoseconds
         }
     }
+
 }

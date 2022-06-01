@@ -93,11 +93,13 @@
             <artifactId>kafka_2.13</artifactId>
             <version>3.2.0</version>
         </dependency>
+        <!--
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-jdk14</artifactId>
             <version>1.7.36</version>
         </dependency>
+        -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -141,7 +143,11 @@
             <artifactId>scala-logging_3</artifactId>
             <version>3.9.4</version>
         </dependency>
-
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>1.7.16</version>
+        </dependency>
     </dependencies>
 
     <properties>
