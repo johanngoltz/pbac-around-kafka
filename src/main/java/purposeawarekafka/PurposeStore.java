@@ -14,6 +14,7 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Properties;
@@ -65,7 +66,8 @@ public class PurposeStore implements Runnable {
 		});
 
 		try {
-			// streams.start();
+			Thread.sleep(Duration.ofMinutes(2).toMillis());
+			streams.start();
 			latch.await();
 		} catch (Throwable e) {
 			streams.close();
