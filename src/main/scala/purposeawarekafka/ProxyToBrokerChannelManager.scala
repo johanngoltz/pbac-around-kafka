@@ -40,7 +40,7 @@ class ProxyToBrokerChannelManager(controllerNodeProvider: ControllerNodeProvider
     override def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest], callback: ControllerRequestCompletionHandler): Unit =
         requestThread.enqueue(BrokerToControllerQueueItem(time.milliseconds, request, callback))
 
-    private def newRequestThread: BrokerToControllerRequestThread = {
+    private def newRequestThread: ProxyToBrokerRequestThread = {
         val channelBuilder = ChannelBuilders.clientChannelBuilder(
             SecurityProtocol.PLAINTEXT,
             null,
@@ -87,45 +87,10 @@ class ProxyToBrokerChannelManager(controllerNodeProvider: ControllerNodeProvider
 
         val threadName = "Forwarder"
 
-        new BrokerToControllerRequestThread(
+        new ProxyToBrokerRequestThread(
             networkClient,
-            manualMetadataUpdater,
-            controllerNodeProvider,
             config,
             time,
-            threadName,
-            retryTimeoutMs) {
-            private val requestQueue = new LinkedBlockingQueue[BrokerToControllerQueueItem]()
-
-            override def enqueue(request: BrokerToControllerQueueItem): Unit = {
-                requestQueue.add(request)
-                wakeup()
-            }
-
-            override def handleResponse(queueItem: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
-                // todo refer to super()
-                if (response.authenticationException == null && response.versionMismatch == null && !response.wasDisconnected) {
-                    queueItem.callback.onComplete(response)
-                } else {
-                    error(s"Request ${queueItem.request} failed!")
-                }
-            }
-
-            override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
-                val requestIter = requestQueue.iterator()
-                while (requestIter.hasNext) {
-                    val request = requestIter.next
-                    requestIter.remove()
-                    return Some(RequestAndCompletionHandler(
-                        time.milliseconds,
-                        new Node(-1, "kafka", 9092),
-                        request.request,
-                        handleResponse(request)))
-                }
-                None
-            }
-
-            override def doWork(): Unit = super.pollOnce(Long.MaxValue)
-        }
+            threadName)
     }
 }
