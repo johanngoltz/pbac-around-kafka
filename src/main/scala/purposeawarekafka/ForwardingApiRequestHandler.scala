@@ -20,7 +20,7 @@ class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config
         Option("Prefix"),
         config.requestTimeoutMs.longValue)
     forwarder.start()
-    val clazz = if (System.getenv("PBAC_CFG_MODE").equals("NONE")) {
+    val clazz = if ("NONE".equals(System.getenv("PBAC_CFG_MODE"))) {
         (request: RequestChannel.Request) => new NoopHandler(request)
     } else {
         (request: RequestChannel.Request) => new FilteringHandler(request)
