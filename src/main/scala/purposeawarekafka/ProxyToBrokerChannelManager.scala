@@ -7,37 +7,45 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
 
+import scala.collection.mutable
 import scala.jdk.CollectionConverters.MapHasAsJava
+import scala.util.Random
 
-class ProxyToBrokerChannelManager(controllerNodeProvider: ControllerNodeProvider,
-                                  time: Time,
+class ProxyToBrokerChannelManager(time: Time,
                                   metrics: Metrics,
                                   config: KafkaConfig,
                                   channelName: String,
-                                  threadNamePrefix: Option[String],
-                                  retryTimeoutMs: Long)
+                                  threadNamePrefix: Option[String])
   extends BrokerToControllerChannelManager with Logging {
-    private val logContext = new LogContext(s"[ProxyToBrokerChannelManager broker=${config.brokerId} name=$channelName] ")
     private val manualMetadataUpdater = new ManualMetadataUpdater()
     private val apiVersions = new ApiVersions()
-    private val currentNodeApiVersions = NodeApiVersions.create()
-    private val requestThread = newRequestThread
+    private val random = Random.javaRandomToRandom(new java.util.Random())
 
-    override def start(): Unit = requestThread.start()
+    private val numThreads = System.getenv("PBAC_NUM_THREADS").toInt
+    private val requestThreads = new mutable.ArrayBuffer[ProxyToBrokerRequestThread](numThreads)
+    (0 to numThreads).foreach(i => newRequestThread(s"${threadNamePrefix.getOrElse("XXX")}-$i"))
+
+    override def start(): Unit = for(thread <- requestThreads) thread.start()
 
     override def shutdown(): Unit = {
-        requestThread.shutdown()
+        for(thread <- requestThreads) thread.shutdown()
         info(s"Proxy to controller channel manager for $channelName shutdown")
     }
 
     override def controllerApiVersions(): Option[NodeApiVersions] = ???
 
-    override def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest], callback: ControllerRequestCompletionHandler): Unit =
-        requestThread.enqueue(BrokerToControllerQueueItem(time.milliseconds, request, callback))
+    override def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest], callback: ControllerRequestCompletionHandler): Unit = {
+        val clientId = request.asInstanceOf[DingsBums].header.clientId()
+        val threadId = random.nextInt(requestThreads.size)
+        requestThreads(threadId).enqueue(BrokerToControllerQueueItem(time.milliseconds, request, callback))
+    }
 
-    private def newRequestThread: ProxyToBrokerRequestThread = {
+    private def newRequestThread(id: String) = {
+        val threadName = s"$threadNamePrefix-pbac-request-forwarder-$id"
+        val logContext = new LogContext(s"[ProxyToBrokerRequestThread broker=${config.brokerId} name=$threadName] ")
+
         val channelBuilder = ChannelBuilders.clientChannelBuilder(
             SecurityProtocol.PLAINTEXT,
             null,
@@ -54,7 +62,7 @@ class ProxyToBrokerChannelManager(controllerNodeProvider: ControllerNodeProvider
             Selector.NO_IDLE_TIMEOUT_MS,
             metrics,
             time,
-            channelName,
+            threadName,
             Map("BrokerId" -> config.brokerId.toString).asJava,
             false,
             channelBuilder,
@@ -82,7 +90,6 @@ class ProxyToBrokerChannelManager(controllerNodeProvider: ControllerNodeProvider
             logContext
         ) {
             override def newClientRequest(nodeId: String, requestBuilder: AbstractRequest.Builder[_], createdTimeMs: Long, expectResponse: Boolean, requestTimeoutMs: Int, callback: RequestCompletionHandler): ClientRequest = {
-                System.out.println("Got here!")
                 val (originalCorrelationId, originalClientId) = requestBuilder match {
                     case bums: DingsBums => (bums.header.correlationId, bums.header.clientId)
                     case _ => throw new IllegalArgumentException("Can only be called with requestBuilder: " + classOf[DingsBums] + ", but got " + requestBuilder.getClass.getSimpleName)
@@ -91,12 +98,12 @@ class ProxyToBrokerChannelManager(controllerNodeProvider: ControllerNodeProvider
             }
         }
 
-        val threadName = "Forwarder"
-
-        new ProxyToBrokerRequestThread(
+        val thread = new ProxyToBrokerRequestThread(
             networkClient,
             config,
             time,
             threadName)
+
+        requestThreads += thread
     }
 }

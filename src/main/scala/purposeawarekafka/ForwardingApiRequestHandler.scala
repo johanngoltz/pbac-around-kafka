@@ -12,15 +12,13 @@ import org.apache.kafka.common.utils.Time
 class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config: KafkaConfig, time: Time, metrics: Metrics, metadataCache: MetadataCache, purposes: Purposes) extends ApiRequestHandler with Logging {
     val requestHelper = new RequestHandlerHelper(requestChannel, QuotaFactory.instantiate(config, metrics, time, "quotaprefix"), time)
     val forwarder = new ProxyToBrokerChannelManager(
-        MetadataCacheControllerNodeProvider(config, metadataCache),
         time,
         metrics,
         config,
         "ChannelName",
-        Option("Prefix"),
-        config.requestTimeoutMs.longValue)
+        Option("Prefix"))
     forwarder.start()
-    val clazz = if ("NONE".equals(System.getenv("PBAC_CFG_MODE"))) {
+    val clazz = if ("NONE".equals(System.getenv("PBAC_MODE"))) {
         (request: RequestChannel.Request) => new NoopHandler(request)
     } else {
         (request: RequestChannel.Request) => new FilteringHandler(request)

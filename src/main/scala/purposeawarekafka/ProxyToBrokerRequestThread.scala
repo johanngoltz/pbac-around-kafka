@@ -13,6 +13,9 @@ class ProxyToBrokerRequestThread(networkClient: KafkaClient,
                                  time: Time,
                                  threadName: String) extends InterBrokerSendThread(threadName, networkClient, config.requestTimeoutMs, time) {
     private val requestQueue = new LinkedBlockingQueue[BrokerToControllerQueueItem]()
+    private val underlyingKafka = new Node(-1,
+        System.getenv("PBAC_KAFKA_HOST"),
+        System.getenv("PBAC_KAFKA_PORT").toInt)
 
      def enqueue(request: BrokerToControllerQueueItem): Unit = {
         requestQueue.add(request)
@@ -35,7 +38,7 @@ class ProxyToBrokerRequestThread(networkClient: KafkaClient,
             requestIter.remove()
             return Some(RequestAndCompletionHandler(
                 time.milliseconds,
-                new Node(-1, "localhost", 9092), // todo change back to kafka
+                underlyingKafka,
                 request.request,
                 handleResponse(request)))
         }

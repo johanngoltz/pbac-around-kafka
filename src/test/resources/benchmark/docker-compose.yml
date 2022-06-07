@@ -17,8 +17,8 @@ services:
       - 'KAFKA_LISTENERS=CLIENT://:29092,EXTERNAL://:9092'
       - 'KAFKA_ADVERTISED_LISTENERS=CLIENT://localhost:29092,EXTERNAL://localhost:9093'
       - 'KAFKA_INTER_BROKER_LISTENER_NAME=CLIENT'
-      - 'KAFKA_LOG4J_ROOT_LOGLEVEL=TRACE'
-      - 'KAFKA_LOG4J_LOGGERS="kafka=TRACE,kafka.request.logger=TRACE,org.apache.kafka=TRACE"'
+      #- 'KAFKA_LOG4J_ROOT_LOGLEVEL=TRACE'
+      #- 'KAFKA_LOG4J_LOGGERS="kafka=TRACE,kafka.request.logger=TRACE,org.apache.kafka=TRACE"'
     depends_on:
       - zookeeper
   pbac:
@@ -26,5 +26,7 @@ services:
     ports:
       - "9093:9093"
     environment:
-      - PBAC_CFG_MODE=NONE
-      - max.in.flight.requests.per.connection=100
+      - PBAC_MODE=NONE
+      - PBAC_KAFKA_HOST=kafka
+      - PBAC_KAFKA_PORT=9092
+      - PBAC_NUM_THREADS=100
