@@ -27,7 +27,7 @@ class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config
     }
 
     def forward(request: RequestChannel.Request): Unit = {
-        val newRequest = new IdentityReturner(request.body[AbstractRequest])
+        val newRequest = new DingsBums(request)
         forwarder.sendRequest(newRequest, clazz(request))
     }
 
