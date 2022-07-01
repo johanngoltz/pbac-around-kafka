@@ -32,6 +32,7 @@ process {
             &(Join-Path $ScriptDirectory 'kafka-producer-perf-test.bat') --num-records $NumRecords --payload-file $PayloadFile --throughput -1 --topic 'producer-bench' --producer-props 'bootstrap.servers=localhost:9092'&
         }
         $jobs
+        Receive-Job -Wait $jobs[0]
         Wait-Job $jobs
         $jobs | ForEach-Object {
             $timings = ((Receive-Job -Keep $PSItem 2>$null # discard stderr, should contain only slf4j classpath warnings
@@ -53,9 +54,10 @@ process {
     if ($BenchmarkConsumer) {
         $jobs = 1..$AgentCount | Foreach-Object {
             $NumMessagesToConsume = [Math]::Floor($NumRecords * 0.9)
-            &(Join-Path $ScriptDirectory \kafka-consumer-perf-test.bat) --topic 'producer-bench' --bootstrap-server 'localhost:9092' --timeout 60_000 --consumer.config 'NoCheckCrcs.config' --messages $NumMessagesToConsume --show-detailed-stats &
+            &(Join-Path $ScriptDirectory \kafka-consumer-perf-test.bat) --topic 'producer-bench' --bootstrap-server 'localhost:9092' --timeout 60000 --consumer.config 'NoCheckCrcs.config' --messages $NumMessagesToConsume --show-detailed-stats &
         }
         $jobs
+        Receive-Job -Wait $jobs[0]
         Wait-Job $jobs
         $jobs | Foreach-Object {
             $Job = $PSItem

@@ -5,15 +5,17 @@ import os
 
 def read_df(i):
 	df_pbac = pd.read_csv(f"../ps/pbac/Results.{i}.csv")
-	df_pbac["System Under Test"] = 'PBAC'
+	df_pbac["System Under Test"] = 'PBAC / 5M records'
 	df_plain = pd.read_csv(f"../ps/plain/Results.{i}.csv")
-	df_plain["System Under Test"] = 'Plain Kafka'
+	df_plain["System Under Test"] = 'Plain Kafka / 10M records'
 	return {"pbac": df_pbac, "plain": df_plain}
 
 def make_scatterplot(i):
 	df = pd.concat(read_df(i).values())
 	
-	fig = px.scatter(df, x="elapsed", y="RecordsPerSecond", color="System Under Test", trendline="lowess", title=f"Throughput [Records/s], {i} producers, 10'000'000 records each", labels={"elapsed": "Seconds elapsed", "RecordsPerSecond": "Throughput [Records/s]"})
+	fig = px.scatter(df, x="elapsed", y="RecordsPerSecond", color="System Under Test", trendline="lowess", 
+		title=f"Throughput over time, {i} producers", 
+		labels={"elapsed": "Seconds elapsed", "RecordsPerSecond": "Throughput [Records/s]"})
 	fig.show()
 
 	if not os.path.exists("images"):
@@ -37,7 +39,7 @@ def bla():
 			"System Under Test": "Plain" 
 		})
 	
-	fig = px.bar(means, x="ProducerCount", y="RecordsPerSecond", color="System Under Test", barmode="group")
+	fig = px.bar(means, x="ProducerCount", y="RecordsPerSecond", color="System Under Test", title="Throughput by #Producers", barmode="group")
 	fig.show()
 
 	if not os.path.exists("images"):

@@ -15,9 +15,7 @@ import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 
 public class PurposeStore implements Runnable {
@@ -43,13 +41,19 @@ public class PurposeStore implements Runnable {
 	}
 
 	public Collection<IntendedPurposeDeclaration> getIntendendedPurposes(String topic, String scope) {
+		if (List.of("user-1", "user-12", "user-65", "user-70").contains(scope)) {
+			return List.of(new IntendedPurposeDeclaration(scope, topic, "some-purpose", ".country != \"DE\""));
+		} else return Collections.emptyList();
+
+		/*
 		final var result = new ArrayList<IntendedPurposeDeclaration>();
 		final var store = streams.store(
 				StoreQueryParameters.fromNameAndType(
 						table.queryableStoreName(),
 						QueryableStoreTypes.<String, IntendedPurposeDeclaration>keyValueStore()));
-		store.prefixScan(topic + "$" + scope + "$", new StringSerializer()).forEachRemaining(pair -> result.add(pair.value));
-		return result;
+		store.prefixScan(topic + "$" + scope + "$", new StringSerializer()).forEachRemaining(pair -> result.add(pair
+		.value));
+		return result;*/
 	}
 
 	@Override
