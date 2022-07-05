@@ -12,15 +12,13 @@ module "gce-container" {
   version = "~> 3.0"
 
   container = {
-    image   = "docker.io/confluentinc/cp-kafka:7.1.1"
+    image   = "us-central1-docker.pkg.dev/pbac-in-pubsub/the-repo/benchmark-load-generator:latest"
     command = [
-      "/bin/sh",
-      "-c",
-      "nc --listen 8080 && /usr/bin/kafka-producer-perf-test"
+      var.client_type == "producer" ? "/usr/bin/run-producer-bench.sh" : "/usr/bin/run-consumer-bench.sh"
     ]
   }
 
-  restart_policy = "never"
+  restart_policy = "No"
 }
 
 resource "google_compute_instance" "default" {
@@ -32,6 +30,7 @@ resource "google_compute_instance" "default" {
   boot_disk {
     initialize_params {
       image = module.gce-container.source_image
+      size = 10
     }
   }
 

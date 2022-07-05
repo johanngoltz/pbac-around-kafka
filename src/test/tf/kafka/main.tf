@@ -8,11 +8,11 @@ terraform {
 }
 
 locals {
-  kafka_hosts = [for i in range(3): cidrhost(var.subnetwork.ip_cidr_range, i + 3)]
+  kafka_hosts = [for i in range(3) : cidrhost(var.subnetwork.ip_cidr_range, i + 3)]
 }
 
 module "gce-container-kafka" {
-  count = length(local.kafka_hosts)
+  count   = length(local.kafka_hosts)
   source  = "terraform-google-modules/container-vm/google"
   version = "~> 3.0"
 
@@ -45,9 +45,17 @@ module "gce-container-kafka" {
         value = "CLIENT"
       },
       {
-        name  = "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR"
-        value = "1"
-      } # TODO increase
+        name  = "KAFKA_CFG_LOG4J_ROOT_LOGLEVEL"
+        value = "TRACE"
+      },
+      {
+        name  = "KAFKA_CFG_LOG4J_LOGGERS"
+        value = "kafka=TRACE,kafka.request.logger=TRACE,org.apache.kafka=TRACE"
+      }
+      #      ,{
+      #        name  = "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR"
+      #        value = "1"
+      #      }
     ]
   }
 
@@ -80,6 +88,7 @@ resource "google_compute_instance" "kafka" {
   boot_disk {
     initialize_params {
       image = module.gce-container-kafka[count.index].source_image
+      size = 100
     }
   }
 
@@ -119,7 +128,7 @@ resource "google_compute_instance" "zookeeper" {
   }
 
   network_interface {
-    subnetwork    = var.subnetwork.name
+    subnetwork = var.subnetwork.name
     network_ip = cidrhost(var.subnetwork.ip_cidr_range, 2)
     # access_config {}
   }

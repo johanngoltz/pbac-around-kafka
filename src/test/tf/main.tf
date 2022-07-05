@@ -54,7 +54,7 @@ resource "google_compute_firewall" "default" {
 
   allow {
     protocol = "tcp"
-    ports    = ["22", "80", "8080", "2181", "9090-9093"]
+    ports    = ["22", "80", "8080", "2181", "9090-9093", "29092"]
   }
 
   source_ranges = ["0.0.0.0/0"]
@@ -87,7 +87,7 @@ module "kafka" {
 }
 
 module "load_generator" {
-  for_each = toset(["producer", "consumer"])
+  for_each = toset(["producer"]) #, "consumer"])
 
   source = "./load_generator"
   providers = {
@@ -116,7 +116,7 @@ resource "google_compute_instance" "controller" {
     }
   }
 
-  metadata_startup_script = "echo hi > /test.txt"
+  metadata_startup_script = "sudo apt-get update && sudo apt-get install -y default-jre wget ncat && wget https://dlcdn.apache.org/kafka/3.2.0/kafka_2.13-3.2.0.tgz && tar -xzf kafka_2.13-3.2.0.tgz -C / && rm kafka_2.13-3.2.0.tgz"
 
   service_account {
     # Google recommends custom service accounts that have cloud-platform scope and permissions granted via IAM Roles.
