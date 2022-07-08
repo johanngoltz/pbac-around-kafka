@@ -1,3 +1,4 @@
+import os
 from collections import namedtuple
 from google.cloud import logging
 import re
@@ -29,7 +30,7 @@ def _get_filter_string(benchmark_start_timestamp, benchmark_end_timestamp):
     return is_progress_message + " " + is_after_begin + " " + is_before_end
 
 
-def get_timeseries_from_logs(produce_or_consume: str, benchmark_start_timestamp: str, benchmark_end_timestamp: str, client_count: int):
+def get_timeseries_from_logs(benchmark_start_timestamp: str, benchmark_end_timestamp: str, file_name: str):
     logging_client = logging.Client(project="pbac-in-pubsub")
 
     benchmark_entries = _get_benchmark_entries(logging_client, benchmark_start_timestamp, benchmark_end_timestamp)
@@ -54,7 +55,9 @@ def get_timeseries_from_logs(produce_or_consume: str, benchmark_start_timestamp:
                 "AvgLatency": avg_latency
             })
 
-    with open(f"{produce_or_consume}.{client_count}.{benchmark_start_timestamp}.csv", "w", newline="") as out_file:
+    os.makedirs("results", exist_ok=True)
+
+    with open(file_name, "x", newline="") as out_file:
         writer = csv.DictWriter(out_file, fieldnames=("Producer", "Timestamp", "RecordsPerSecond", "AvgLatency"))
 
         writer.writeheader()

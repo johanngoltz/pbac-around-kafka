@@ -6,6 +6,8 @@ name = "pypi"
 [packages]
 google-cloud-logging = "*"
 plotly = "*"
+pandas = "*"
+statsmodels = "*"
 
 [dev-packages]
 

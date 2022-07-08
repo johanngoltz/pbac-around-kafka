@@ -78,7 +78,7 @@ module "cloud_router" {
 }
 
 module "kafka" {
-  source = "./kafka"
+  source    = "./kafka"
   providers = {
     google = google
   }
@@ -87,15 +87,16 @@ module "kafka" {
 }
 
 module "load_generator" {
-  for_each = toset(["producer"]) #, "consumer"])
+  for_each = toset(split(",", var.client_types))
 
-  source = "./load_generator"
+  source    = "./load_generator"
   providers = {
     google = google
   }
-  client_count = 4
+  client_count = var.client_count
   client_type  = each.key
   network_name = google_compute_network.default.name
+  msg_count    = var.benchmark_msgs_to_send
 }
 
 resource "google_compute_instance" "controller" {

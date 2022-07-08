@@ -83,7 +83,7 @@ resource "google_compute_instance" "kafka" {
   count = length(local.kafka_hosts)
 
   name         = "kafka-${count.index}"
-  machine_type = "e2-medium"
+  machine_type = "e2-standard-2"
 
   boot_disk {
     initialize_params {
@@ -119,7 +119,7 @@ resource "google_compute_instance" "kafka" {
 
 resource "google_compute_instance" "zookeeper" {
   name         = "zookeeper"
-  machine_type = "e2-medium"
+  machine_type = "e2-micro"
 
   boot_disk {
     initialize_params {

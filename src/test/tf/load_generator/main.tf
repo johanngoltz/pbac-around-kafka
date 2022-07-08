@@ -16,21 +16,27 @@ module "gce-container" {
     command = [
       var.client_type == "producer" ? "/usr/bin/run-producer-bench.sh" : "/usr/bin/run-consumer-bench.sh"
     ]
+    env = [
+      {
+        name  = "BENCHMARK_NUM_RECORDS"
+        value = var.msg_count
+      }
+    ]
   }
 
-  restart_policy = "No"
+  restart_policy = "Never"
 }
 
 resource "google_compute_instance" "default" {
   count = var.client_count
 
   name         = "${var.client_type}-${count.index}"
-  machine_type = "e2-small"
+  machine_type = "e2-medium"
 
   boot_disk {
     initialize_params {
       image = module.gce-container.source_image
-      size = 10
+      size  = 10
     }
   }
 

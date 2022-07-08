@@ -9,3 +9,7 @@ variable "network_name" {
 variable "client_count" {
   type = number
 }
+
+variable "msg_count" {
+  type    = number
+}
