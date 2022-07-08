@@ -8,6 +8,7 @@ google-cloud-logging = "*"
 plotly = "*"
 pandas = "*"
 statsmodels = "*"
+kaleido = "*"
 
 [dev-packages]
 
