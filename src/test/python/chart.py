@@ -9,13 +9,10 @@ from pandas import DataFrame
 pio.kaleido.scope.default_scale = 4
 
 
-def make_scatterplot(i, df, file_name):
-    fig = px.scatter(df, x="seconds_since_start", y="RecordsPerSecond", color="plain_or_pbac", trendline="lowess",
-                     title=f"Throughput over time, {i} producers",
-                     labels={"RecordsPerSecond": "Throughput [Records/s]"})
-    fig.show()
-
-    fig.write_image(f"images/{file_name}.png")
+def make_scatterplot(i, df):
+    return px.scatter(df, x="seconds_since_start", y="RecordsPerSecond", color="plain_or_pbac", trendline="lowess",
+                      title=f"Throughput over time, {i} producers",
+                      labels={"RecordsPerSecond": "Throughput [Records/s]"})
 
 
 def make_barchart(df: pd.DataFrame):
@@ -27,8 +24,7 @@ def make_barchart(df: pd.DataFrame):
                  barmode="group",
                  labels=dict(x="#Clients", color="Mode"))
     fig.update_xaxes(type='category')
-
-    fig.show()
+    return fig
 
 
 if __name__ == "__main__":
@@ -43,40 +39,46 @@ if __name__ == "__main__":
 
     candidate_indices = runs[runs["plain_or_pbac"] == plain_or_pbac]["produce_or_consume"] == produce_or_consume
 
-    maxes = runs[candidate_indices].groupby("client_count").max()
+    group_by = ["plain_or_pbac", "produce_or_consume", "client_count"]
+    latest_runs = runs[candidate_indices].groupby(group_by).max()
 
     all_data = None
 
-    for client_count in maxes.T:
-        run = dict(maxes.loc[client_count])
-        file_format_begin_ts = run.get('begin_ts').strftime("%Y%m%dT%H%M%S%z")
+    for runtuple in latest_runs.itertuples():
+        begin_ts = runtuple.begin_ts
+        end_ts = runtuple.end_ts
+        plain_or_pbac, produce_or_consume, client_count = runtuple.Index
 
-        run["begin_ts"] = run.get("begin_ts").isoformat()
-        run["end_ts"] = run.get("end_ts").isoformat()
+        file_format_begin_ts = begin_ts.strftime("%Y%m%dT%H%M%S%z")
 
-        file_name = f"{run.get('produce_or_consume')}.{run.get('plain_or_pbac')}.{client_count}.{file_format_begin_ts}"
+        begin_ts = begin_ts.isoformat()
+        end_ts = end_ts.isoformat()
+
+        file_name = f"{produce_or_consume}.{plain_or_pbac}.{client_count}.{file_format_begin_ts}"
         csv_file_name = f"results/{file_name}.csv"
 
         if not os.path.exists(csv_file_name):
-            get_timeseries_from_logs(run.get('begin_ts'), run.get('end_ts'), csv_file_name)
+            get_timeseries_from_logs(begin_ts, end_ts, csv_file_name)
 
         df = pd.read_csv(csv_file_name, parse_dates=["Timestamp"])
         df["plain_or_pbac"] = plain_or_pbac
         df["produce_or_consume"] = produce_or_consume
-        df["seconds_since_start"] = (df["Timestamp"] - maxes.loc[client_count]["begin_ts"]).map(
-            lambda x: x.total_seconds())
+        df["seconds_since_start"] = (df["Timestamp"] - runtuple.begin_ts).map(lambda x: x.total_seconds())
         df["client_count"] = client_count
 
-        make_scatterplot(client_count, df, file_name)
+        fig = make_scatterplot(client_count, df)
+        fig.write_image(f"images/{file_name}.png")
 
         all_data = pd.concat((all_data, df))
 
-    avg_sum_throughput = all_data \
+    avg_throughput = all_data \
         .query("seconds_since_start > 400") \
-        .groupby(["plain_or_pbac", "produce_or_consume", "client_count"]) \
+        .groupby(group_by) \
         .mean() \
-        ["RecordsPerSecond"] \
-        .multiply(list(maxes.T)) \
+        ["RecordsPerSecond"]
+    avg_sum_throughput = avg_throughput \
+        .multiply(avg_throughput.index.get_level_values("client_count")) \
         .to_frame("RecordsPerSecond")
 
-    make_barchart(avg_sum_throughput)
+    fig = make_barchart(avg_sum_throughput)
+    fig.write_image(f"images/SumThroughput.png")
