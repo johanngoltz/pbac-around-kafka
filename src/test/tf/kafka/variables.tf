@@ -4,3 +4,8 @@ variable "subnetwork" {
     name = string
   })
 }
+
+variable "enable_pbac" {
+  type = bool
+  default = false
+}
