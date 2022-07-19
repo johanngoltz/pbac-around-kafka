@@ -45,7 +45,7 @@
 
             "Produce;$Mode;$AgentCount;$beginTs;$endTs" >> BenchmarkRuns.csv
 
-            terraform destroy -var='client_types=producer' -target='module.load_generator' -target='module.kafka' -auto-approve
+            terraform destroy -target='module.load_generator' -target='module.kafka' -auto-approve
         }
 
     }
