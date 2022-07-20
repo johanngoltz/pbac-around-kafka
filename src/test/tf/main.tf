@@ -83,7 +83,7 @@ module "kafka" {
     google = google
   }
 
-  enable_pbac = true
+  enable_pbac = var.enable_pbac
   subnetwork = google_compute_subnetwork.kafka
 }
 

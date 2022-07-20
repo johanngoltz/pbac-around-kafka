@@ -18,3 +18,7 @@ variable "benchmark_msgs_to_send" {
   type    = number
   default = 50000000
 }
+
+variable "enable_pbac" {
+  type = bool
+}

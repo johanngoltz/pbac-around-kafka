@@ -3,7 +3,8 @@
         [Parameter()][int]$AgentCount,
         [Parameter()][ValidateSet("Plain", "PBAC")][string]$Mode,
         [Parameter(Mandatory = $false)][Switch]$BenchmarkProducer,
-        [Parameter(Mandatory = $false)][Switch]$BenchmarkConsumer
+        [Parameter(Mandatory = $false)][Switch]$BenchmarkConsumer,
+        [Parameter()][int]$DurationInSeconds = 600
     )
 
     process {
@@ -11,8 +12,8 @@
         {
             Push-Location ..\tf
 
-            terraform destroy -var='client_types=producer' -target='module.load_generator' -target='module.kafka' -auto-approve
-            terraform apply -var='client_types=producer' -var="client_count=$AgentCount" -var="benchmark_msgs_to_send=2147483647" -auto-approve
+            terraform destroy -var='client_types=producer' -var="enable_pbac=true" -target='module.load_generator' -target='module.kafka' -auto-approve
+            terraform apply -var='client_types=producer' -var="client_count=$AgentCount" -var="enable_pbac=$(($Mode -eq 'PBAC') + 0)" -var="benchmark_msgs_to_send=2147483647" -auto-approve
 
             Pop-Location
 
@@ -27,7 +28,7 @@
             gcloud compute ssh --zone "us-central1-f" --project "pbac-in-pubsub" "controller" --command $controllerShellCommand
 
             $logMessageQueryIntervalSeconds = 60
-            for($i=0; $i -lt 10; $i++)
+            for($i=0; $i -lt ($DurationInSeconds / $logMessageQueryIntervalSeconds); $i++)
             {
                 Start-Sleep -Seconds $logMessageQueryIntervalSeconds
 
@@ -39,7 +40,7 @@
                 gcloud logging read $filterString --bucket=benchmark-results --view _AllLogs --location us-central1 --limit 1 --format 'get(jsonPayload.message)'
             }
 
-            Write-Output "Ending run after 10 minutes."
+            Write-Output "Ending run after $DurationInSeconds seconds."
 
             $endTs = Get-Date -Format O
 

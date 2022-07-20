@@ -154,7 +154,7 @@ resource "google_compute_instance" "kafka" {
 }
 
 resource "google_compute_instance" "pbac" {
-  count = length(local.kafka_hosts)
+  count = var.enable_pbac ? length(local.kafka_hosts) : 0
 
   name         = "pbac-${count.index}"
   machine_type = "e2-medium"
