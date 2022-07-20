@@ -1,0 +1,34 @@
+@startuml
+skinparam responseMessageBelowArrow true
+
+participant Controller
+note left of Controller: actually 2 controllers,\nlogically grouped
+collections Producer
+collections PBACProxy
+collections Kafka
+database LogBucket
+
+Controller -> Producer ++: Start Load Generation
+
+Producer -> Kafka ++: Bootstrap
+Kafka --> Producer --: Advertise PBACProxy
+
+loop
+    Producer -> PBACProxy ++: Produce
+    PBACProxy -> Kafka ++: Produce
+    Kafka --> PBACProxy --: Produce ACK
+    PBACProxy --> Producer --: Produce ACK
+
+    alt 5 second interval
+        Producer -> LogBucket: Log throughput, latency
+    end
+
+end
+
+Controller -> Producer !!: Destroy
+Controller -> PBACProxy !!: Destroy
+Controller -> Kafka !!: Destroy
+
+Controller -> LogBucket: Request Logs
+LogBucket --> Controller: Pre-Filtered Logs
+@enduml

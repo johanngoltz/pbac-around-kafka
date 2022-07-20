@@ -1,0 +1,29 @@
+@startuml
+
+agent Controller as "Controller 1"
+Controller -> GCP : Create / Destroy
+
+cloud GCP as " " {
+    collections Producers
+
+    package bla as "Replication x3" {
+        together {
+            agent Kafka
+            agent PBAC as "PBAC-Proxy"
+        }
+
+        Kafka -(0- PBAC : Forward
+    }
+
+    Kafka -(0- Producers : Bootstrap
+    PBAC -(0- Producers : Produce
+
+    agent Controller2 as "Controller 2"
+    Producers <- Controller2 : Start
+
+    storage LogBucket as "Log Bucket"
+    Producers ---> LogBucket : Report metrics
+    Controller ---> LogBucket: Read logs
+}
+
+@enduml
