@@ -10,6 +10,65 @@ terraform {
 locals {
   # todo migrate to DNS names?
   kafka_hosts = [for i in range(1) : cidrhost(var.subnetwork.ip_cidr_range, i + 3)]
+  kafka_env = [
+    {
+      name  = "KAFKA_CFG_ZOOKEEPER_CONNECT"
+      value = "zookeeper:2181"
+    },
+    {
+      name  = "ALLOW_PLAINTEXT_LISTENER"
+      value = "yes"
+    },
+    {
+      name  = "KAFKA_CFG_LISTENERS"
+      value = "CLIENT://:29092,EXTERNAL://:9092"
+    },
+    {
+      name  = "KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP"
+      value = "CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT"
+    },
+    {
+      name  = "KAFKA_CFG_INTER_BROKER_LISTENER_NAME"
+      value = "CLIENT"
+    },
+    {
+      name  = "KAFKA_CFG_LOG4J_ROOT_LOGLEVEL"
+      value = "TRACE"
+    },
+    {
+      name  = "KAFKA_CFG_LOG4J_LOGGERS"
+      value = "kafka=TRACE,kafka.request.logger=TRACE,org.apache.kafka=TRACE"
+    }, {
+      name  = "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR"
+      value = "1"
+    }
+  ]
+  pbac_env = [
+    {
+      name  = "PBAC_KAFKA_HOST"
+      value = "host.docker.internal"
+    },
+    {
+      name  = "PBAC_KAFKA_PORT"
+      value = "9092"
+    },
+    {
+      name  = "PBAC_NUM_THREADS"
+      value = "100"
+    },
+    {
+      name  = "PBAC_MODE"
+      value = "FILTER_ON_PUBLISH"
+    },
+    {
+      name  = "KAFKA_CFG_LOG4J_ROOT_LOGLEVEL"
+      value = "TRACE"
+    },
+    {
+      name  = "KAFKA_CFG_LOG4J_LOGGERS"
+      value = "kafka=TRACE,kafka.request.logger=TRACE,org.apache.kafka=TRACE"
+    }
+  ]
 }
 
 module "gce-container-kafka" {
@@ -123,7 +182,7 @@ resource "google_compute_instance" "kafka" {
 
   boot_disk {
     initialize_params {
-      image = module.gce-container-kafka[count.index].source_image
+      image = "cos-cloud/cos-stable"
       size  = 100
     }
   }
@@ -138,13 +197,52 @@ resource "google_compute_instance" "kafka" {
 
   metadata = {
     serial-port-logging-enable = "TRUE"
-    gce-container-declaration  = module.gce-container-kafka[count.index].metadata_value
+    user-data = <<EOT
+      #cloud-config
+
+      users:
+      - name: cloudservice
+        uid: 2000
+
+      write_files:
+      - path: /etc/systemd/system/kafka.service
+        permissions: 0644
+        owner: root
+        content: |
+          [Unit]
+          Description=Kafka broker
+          Wants=gcr-online.target
+          After=gcr-online.target
+
+          [Service]
+          Environment="HOME=/home/cloudservice"
+          ExecStart=/usr/bin/docker run -u 2000 --name=kafka -p 9092:9092 -p 29092:29092 --env KAFKA_CFG_ADVERTISED_LISTENERS=CLIENT://kafka-${count.index}:29092,EXTERNAL://%{if var.enable_pbac}kafka-${count.index}:9093%{else}kafka-${count.index}:9092%{endif} %{ for envvar in local.kafka_env} --env ${envvar.name}=${envvar.value} %{ endfor } docker.io/bitnami/kafka:3.1
+          ExecStop=/usr/bin/docker stop kafka
+          ExecStopPost=/usr/bin/docker rm kafka
+      - path: /etc/systemd/system/pbac.service
+        permissions: 0644
+        owner: root
+        content: |
+          [Unit]
+          Description=PBAC
+          After=kafka.service
+
+          [Service]
+          Environment="HOME=/home/cloudservice"
+          ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries us-central1-docker.pkg.dev
+          ExecStart=/usr/bin/docker run -u 2000 --name=pbac -p 9093:9093 %{ for envvar in local.pbac_env} --env ${envvar.name}=${envvar.value} %{ endfor } us-central1-docker.pkg.dev/pbac-in-pubsub/the-repo/pbac-around-kafka:latest
+          ExecStop=/usr/bin/docker stop pbac
+          ExecStopPost=/usr/bin/docker rm pbac
+
+      runcmd:
+      - echo 'DOCKER_OPTS="--registry-mirror=https://mirror.gcr.io"' | tee /etc/default/docker
+      - systemctl daemon-reload
+      - systemctl restart docker
+      - systemctl start kafka.service
+      %{ if var.enable_pbac } - systemctl start pbac.service %{ endif }
+    EOT
     google-logging-enabled     = "true"
     google-monitoring-enabled  = "true"
-  }
-
-  labels = {
-    container-vm = module.gce-container-kafka[count.index].vm_container_label
   }
 
   service_account {
@@ -154,7 +252,7 @@ resource "google_compute_instance" "kafka" {
 }
 
 resource "google_compute_instance" "pbac" {
-  count = var.enable_pbac ? length(local.kafka_hosts) : 0
+  count = 0 #var.enable_pbac ? length(local.kafka_hosts) : 0
 
   name         = "pbac-${count.index}"
   machine_type = "e2-medium"
