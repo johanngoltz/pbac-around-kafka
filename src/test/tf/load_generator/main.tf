@@ -31,7 +31,7 @@ resource "google_compute_instance" "default" {
   count = var.client_count
 
   name         = "${var.client_type}-${count.index}"
-  machine_type = "e2-medium"
+  machine_type = "t2d-standard-1"
 
   boot_disk {
     initialize_params {

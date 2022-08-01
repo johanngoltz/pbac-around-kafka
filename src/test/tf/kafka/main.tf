@@ -92,7 +92,7 @@ resource "google_compute_instance" "kafka" {
   count = length(local.kafka_hosts)
 
   name         = "kafka-${count.index}"
-  machine_type = "e2-standard-2"
+  machine_type = "n2d-standard-2"
 
   boot_disk {
     initialize_params {
