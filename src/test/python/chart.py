@@ -51,6 +51,7 @@ if __name__ == "__main__":
     all_data = None
 
     for runtuple in latest_runs.itertuples():
+        print("Processing " + str(runtuple))
         begin_ts = runtuple.begin_ts
         end_ts = runtuple.end_ts
         plain_or_pbac, produce_or_consume, client_count = runtuple.Index
@@ -64,6 +65,7 @@ if __name__ == "__main__":
         csv_file_name = f"results/{file_name}.csv"
 
         if not os.path.exists(csv_file_name):
+            print("Getting logs...")
             get_timeseries_from_logs(begin_ts, end_ts, csv_file_name)
 
         df = pd.read_csv(csv_file_name, parse_dates=["Timestamp"])
