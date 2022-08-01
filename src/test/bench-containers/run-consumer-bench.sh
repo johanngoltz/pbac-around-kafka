@@ -1,4 +1,5 @@
 #!/bin/sh
+echo 'check.crcs=false' > 'NoCheckCrcs.config'
 nc --listen 8080
 /usr/bin/kafka-consumer-perf-test --messages $BENCHMARK_NUM_RECORDS \
   --topic 'bench'\
