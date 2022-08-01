@@ -101,7 +101,7 @@ resource "google_compute_instance" "kafka" {
   boot_disk {
     initialize_params {
       image = "cos-cloud/cos-stable"
-      size  = 100
+      size  = 400
       type  = "pd-ssd"
     }
   }
