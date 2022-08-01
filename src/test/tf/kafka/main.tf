@@ -155,7 +155,8 @@ resource "google_compute_instance" "kafka" {
         content: |
           [Unit]
           Description=PBAC
-          After=kafka.service
+          Wants=gcr-online.target
+          After=gcr-online.target, kafka.service
 
           [Service]
           Environment="HOME=/home/cloudservice"
