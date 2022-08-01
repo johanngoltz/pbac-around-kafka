@@ -46,7 +46,7 @@ locals {
   pbac_env = [
     {
       name  = "PBAC_KAFKA_HOST"
-      value = "host.docker.internal"
+      value = "kafka-0"
     },
     {
       name  = "PBAC_KAFKA_PORT"
@@ -205,6 +205,17 @@ resource "google_compute_instance" "kafka" {
         uid: 2000
 
       write_files:
+      - path: /etc/systemd/system/config-firewall.service
+        permissions: 0644
+        owner: root
+        content: |
+          [Unit]
+          Description=Configures the host firewall
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=true
+          ExecStart=/sbin/iptables -A INPUT -p tcp --match multiport --dports 9092,9093,29092 -j ACCEPT
       - path: /etc/systemd/system/kafka.service
         permissions: 0644
         owner: root
@@ -212,11 +223,11 @@ resource "google_compute_instance" "kafka" {
           [Unit]
           Description=Kafka broker
           Wants=gcr-online.target
-          After=gcr-online.target
+          After=gcr-online.target, config-firewall.service
 
           [Service]
           Environment="HOME=/home/cloudservice"
-          ExecStart=/usr/bin/docker run -u 2000 --name=kafka -p 9092:9092 -p 29092:29092 --env KAFKA_CFG_ADVERTISED_LISTENERS=CLIENT://kafka-${count.index}:29092,EXTERNAL://%{if var.enable_pbac}kafka-${count.index}:9093%{else}kafka-${count.index}:9092%{endif} %{ for envvar in local.kafka_env} --env ${envvar.name}=${envvar.value} %{ endfor } docker.io/bitnami/kafka:3.1
+          ExecStart=/usr/bin/docker run -u 2000 --name=kafka --network host --env KAFKA_CFG_ADVERTISED_LISTENERS=CLIENT://kafka-${count.index}:29092,EXTERNAL://kafka-${count.index}:%{if var.enable_pbac}9093%{else}9092%{endif} %{ for envvar in local.kafka_env} --env ${envvar.name}=${envvar.value} %{ endfor } docker.io/bitnami/kafka:3.1
           ExecStop=/usr/bin/docker stop kafka
           ExecStopPost=/usr/bin/docker rm kafka
       - path: /etc/systemd/system/pbac.service
@@ -230,11 +241,12 @@ resource "google_compute_instance" "kafka" {
           [Service]
           Environment="HOME=/home/cloudservice"
           ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries us-central1-docker.pkg.dev
-          ExecStart=/usr/bin/docker run -u 2000 --name=pbac -p 9093:9093 %{ for envvar in local.pbac_env} --env ${envvar.name}=${envvar.value} %{ endfor } us-central1-docker.pkg.dev/pbac-in-pubsub/the-repo/pbac-around-kafka:latest
+          ExecStart=/usr/bin/docker run -u 2000 --name=pbac --network host %{ for envvar in local.pbac_env} --env ${envvar.name}=${envvar.value} %{ endfor } us-central1-docker.pkg.dev/pbac-in-pubsub/the-repo/pbac-around-kafka:latest
           ExecStop=/usr/bin/docker stop pbac
           ExecStopPost=/usr/bin/docker rm pbac
 
       runcmd:
+      - systemctl start config-firewall.service
       - echo 'DOCKER_OPTS="--registry-mirror=https://mirror.gcr.io"' | tee /etc/default/docker
       - systemctl daemon-reload
       - systemctl restart docker
