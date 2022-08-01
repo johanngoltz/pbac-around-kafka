@@ -10,10 +10,14 @@ terraform {
 locals {
   # todo migrate to DNS names?
   kafka_hosts = [for i in range(1) : cidrhost(var.subnetwork.ip_cidr_range, i + 3)]
-  kafka_env = [
+  kafka_env   = [
     {
       name  = "KAFKA_CFG_ZOOKEEPER_CONNECT"
       value = "zookeeper:2181"
+    },
+    {
+      name  = "KAFKA_CFG_ZOOKEEPER_CONNECTION_TIMEOUT_MS"
+      value = "150000"
     },
     {
       name  = "ALLOW_PLAINTEXT_LISTENER"
@@ -112,7 +116,7 @@ resource "google_compute_instance" "kafka" {
 
   metadata = {
     serial-port-logging-enable = "TRUE"
-    user-data = <<EOT
+    user-data                  = <<EOT
       #cloud-config
 
       users:
