@@ -1,4 +1,6 @@
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pandas as pd
 import os
 import plotly.io as pio
@@ -9,22 +11,25 @@ from pandas import DataFrame
 pio.kaleido.scope.default_scale = 8
 
 
-def make_scatterplot(i, df):
+def make_scatterplot(title, df):
     return px.scatter(df, x="seconds_since_start", y="RecordsPerSecond", color="plain_or_pbac", trendline="lowess",
-                      title=f"Throughput over time, {i} producers",
+                      title=title,
                       labels={"RecordsPerSecond": "Throughput [Records/s]",
                               "seconds_since_start": "Time elapsed [s]",
                               "plain_or_pbac": "System under test"})
 
 
 def make_barchart(df: pd.DataFrame):
+    df = df.reset_index()
+
     fig = px.bar(df,
-                 x=df.index.get_level_values("client_count"),
+                 x="client_count",
                  y="RecordsPerSecond",
-                 color=df.index.get_level_values("plain_or_pbac"),
-                 title="Average Throughput",
+                 color="plain_or_pbac",
+                 facet_col="produce_or_consume",
+                 title="Average Throughput Of All Clients",
                  barmode="group",
-                 labels=dict(x="#Clients", color="System under Test"))
+                 labels=dict(client_count="#Clients", plain_or_pbac="System under Test", RecordsPerSecond="#Messages / s"))
     fig.update_xaxes(type='category')
     return fig
 
@@ -66,9 +71,13 @@ if __name__ == "__main__":
 
         if not os.path.exists(csv_file_name):
             print("Getting logs...")
-            get_timeseries_from_logs(begin_ts, end_ts, csv_file_name)
+            get_timeseries_from_logs(produce_or_consume, begin_ts, end_ts, csv_file_name)
 
         df = pd.read_csv(csv_file_name, parse_dates=["Timestamp"])
+        if not len(df):
+            print("No data found in " + csv_file_name)
+            continue
+
         df["plain_or_pbac"] = plain_or_pbac
         df["produce_or_consume"] = produce_or_consume
         df["seconds_since_start"] = (df["Timestamp"] - runtuple.begin_ts).map(lambda x: x.total_seconds())
@@ -78,7 +87,7 @@ if __name__ == "__main__":
 
         image_file_name = f"images/{file_name}.png"
         if not os.path.exists(image_file_name):
-            fig = make_scatterplot(client_count, df)
+            fig = make_scatterplot(f"Throughput Over Time, {client_count} {produce_or_consume}rs, {plain_or_pbac}", df)
             fig.write_image(image_file_name)
 
         all_data = pd.concat((all_data, df))
@@ -88,11 +97,11 @@ if __name__ == "__main__":
                                      'Plain' in group['plain_or_pbac'].values
         if can_compare_plain_and_pbac:
             image_file_name = f"images/{produce_or_consume}.Compare.{client_count}.png"
-            fig = make_scatterplot(client_count, group)
-            fig.write_image(image_file_name)
+            # fig = make_scatterplot(f"Throughput Over Time, {client_count} {produce_or_consume}rs", group)
+            # fig.write_image(image_file_name)
 
     avg_throughput = all_data \
-        .query("seconds_since_start > 400") \
+        .query("seconds_since_start > 30") \
         .groupby(group_for_latest_run) \
         .mean() \
         ["RecordsPerSecond"]
