@@ -1,6 +1,4 @@
 import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import pandas as pd
 import os
 import plotly.io as pio
@@ -29,8 +27,11 @@ def make_barchart(df: pd.DataFrame):
                  facet_col="produce_or_consume",
                  title="Average Throughput Of All Clients",
                  barmode="group",
-                 labels=dict(client_count="#Clients", plain_or_pbac="System under Test", RecordsPerSecond="#Messages / s"))
-    fig.update_xaxes(type='category')
+                 labels=dict(client_count="#Clients", plain_or_pbac="System under Test", RecordsPerSecond="#Messages / s"),
+                 width=800,
+                 height=500)
+    fig.update_xaxes(type='category') # don't show unused client counts
+    fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1])) # set subtitles to Consume / Produce
     return fig
 
 
@@ -97,8 +98,8 @@ if __name__ == "__main__":
                                      'Plain' in group['plain_or_pbac'].values
         if can_compare_plain_and_pbac:
             image_file_name = f"images/{produce_or_consume}.Compare.{client_count}.png"
-            # fig = make_scatterplot(f"Throughput Over Time, {client_count} {produce_or_consume}rs", group)
-            # fig.write_image(image_file_name)
+            fig = make_scatterplot(f"Throughput Over Time, {client_count} {produce_or_consume}rs", group)
+            fig.write_image(image_file_name)
 
     avg_throughput = all_data \
         .query("seconds_since_start > 30") \
