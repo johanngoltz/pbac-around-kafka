@@ -141,8 +141,8 @@ resource "google_compute_instance" "kafka" {
         content: |
           [Unit]
           Description=Kafka broker
-          Wants=gcr-online.target
-          After=gcr-online.target, config-firewall.service
+          Wants=gcr-online.target, docker.service
+          After=gcr-online.target, config-firewall.service, docker.service
 
           [Service]
           Environment="HOME=/home/cloudservice"
@@ -155,8 +155,8 @@ resource "google_compute_instance" "kafka" {
         content: |
           [Unit]
           Description=PBAC
-          Wants=gcr-online.target
-          After=gcr-online.target, kafka.service
+          Wants=gcr-online.target, docker.service
+          After=gcr-online.target, kafka.service, docker.service
 
           [Service]
           Environment="HOME=/home/cloudservice"
