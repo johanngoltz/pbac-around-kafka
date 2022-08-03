@@ -12,7 +12,7 @@ pio.kaleido.scope.default_scale = 8
 def make_scatterplot(title, df):
     return px.scatter(df, x="seconds_since_start", y="RecordsPerSecond", color="plain_or_pbac", trendline="lowess",
                       title=title,
-                      labels={"RecordsPerSecond": "Throughput [Records/s]",
+                      labels={"RecordsPerSecond": "Throughput [Messages/s]",
                               "seconds_since_start": "Time elapsed [s]",
                               "plain_or_pbac": "System under test"})
 
@@ -24,22 +24,26 @@ def make_barchart(df: pd.DataFrame):
                  x="client_count",
                  y="RecordsPerSecond",
                  color="plain_or_pbac",
-                 facet_col="produce_or_consume",
+                 facet_row="produce_or_consume",
                  title="Average Throughput Of All Clients",
                  barmode="group",
-                 labels=dict(client_count="#Clients", plain_or_pbac="System under Test", RecordsPerSecond="#Messages / s"),
+                 category_orders={'produce_or_consume': ['Produce', 'Consume']},
+                 labels=dict(client_count="#Clients", plain_or_pbac="System under Test",
+                             RecordsPerSecond="Throughput [Messages/s]"),
                  width=800,
-                 height=500)
-    fig.update_xaxes(type='category') # don't show unused client counts
-    fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1])) # set subtitles to Consume / Produce
+                 height=800)
+    fig.update_xaxes(type='category')  # don't show unused client counts
+    fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))  # set subtitles to Consume / Produce
+    fig.update_yaxes(matches=None)
     return fig
 
 
 def check_consistency(df: pd.DataFrame):
     measurement_points_by_producer = df.groupby("Producer").size()
     reference_num_measurement_points = measurement_points_by_producer.iloc[0]
-    allowed_abs_deviation = reference_num_measurement_points // 100
-    deviating_num_measurement_points_reported = ((measurement_points_by_producer - reference_num_measurement_points).abs() > allowed_abs_deviation).any()
+    allowed_abs_deviation = max(1, reference_num_measurement_points // 100)
+    deviating_num_measurement_points_reported = (
+                (measurement_points_by_producer - reference_num_measurement_points).abs() > allowed_abs_deviation).any()
     if deviating_num_measurement_points_reported:
         raise AssertionError("Got unequal number of measurement points: " + str(measurement_points_by_producer))
 
@@ -61,6 +65,10 @@ if __name__ == "__main__":
         begin_ts = runtuple.begin_ts
         end_ts = runtuple.end_ts
         plain_or_pbac, produce_or_consume, client_count = runtuple.Index
+
+        if client_count > 8:
+            print("Skipping ")
+            continue
 
         file_format_begin_ts = begin_ts.strftime("%Y%m%dT%H%M%S%z")
 
@@ -102,7 +110,7 @@ if __name__ == "__main__":
             fig.write_image(image_file_name)
 
     avg_throughput = all_data \
-        .query("seconds_since_start > 30") \
+        .query("seconds_since_start > 5") \
         .groupby(group_for_latest_run) \
         .mean() \
         ["RecordsPerSecond"]
