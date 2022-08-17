@@ -13,9 +13,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Slf4j
 public class Purposes {
@@ -28,6 +26,7 @@ public class Purposes {
 			new IntendedPurposeScope("user-1234", "quickstart-events", "marketing.email"), ".country == \"DE\"",
 			new IntendedPurposeScope("user-6789", "quickstart-events", "billing"), ".country == \"PL\""
 	);
+	private final Set<String> topicNamesToExcludeFromPBAC = Collections.synchronizedSet(new HashSet<>(List.of("reservations")));
 
 	private final PurposeStore purposeStore;
 
@@ -47,18 +46,18 @@ public class Purposes {
 		final var declaredPurpose = declaredPurposes.get(requestHeader.clientId());
 		if (response.data() instanceof FetchResponseData fetchResponseData) {
 			for (final var fetchableTopicResponse : fetchResponseData.responses()) {
-				final var topic = fetchableTopicResponse.topic();
-				if (!"reservations".equals(topic)) {
+				final var topicName = fetchableTopicResponse.topic();
+				if (!topicNamesToExcludeFromPBAC.contains(topicName)) {
 					for (final var partition : fetchableTopicResponse.partitions()) {
 						final var records = (MemoryRecords) partition.records();
 						for (Record record : records.records()) {
-							makeRecordCompliant(declaredPurpose, topic, record);
+							makeRecordCompliant(declaredPurpose, topicName, record);
 						}
 					}
 				}
 			}
 		} else {
-			throw new UnsupportedOperationException(response.getClass().getName() + " is not supported!");
+			throw new UnsupportedOperationException(response.getClass().getName() + " is not an instance of FetchResponseData. Cannot apply PBAC.");
 		}
 	}
 
@@ -76,7 +75,7 @@ public class Purposes {
 				isCompliant = true;
 			} else {
 				final var jqFilter = intendedPurposes.iterator().next().condition();
-				log.info("Evaluating " + jqFilter);
+				// log.info("Evaluating " + jqFilter);
 				isCompliant = jq.evaluateToBool(jqFilter, reader);
 			}
 		} catch (JsonParseException e) {
