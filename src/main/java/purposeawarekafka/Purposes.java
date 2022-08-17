@@ -19,13 +19,15 @@ import java.util.*;
 public class Purposes {
 	private final Collection<ApiKeys> relevantApiKeys = List.of(ApiKeys.FETCH); //ApiKeys.OFFSET_FETCH
 	private final jq jq = new jq();
-	private final Map<String, String> declaredPurposes = Map.of(
-			"marketing-consumer", "marketing.email",
-			"billing-consumer", "billing");
+	private final Map<AccessPurposeKey, String> declaredPurposes = Map.of(
+			new AccessPurposeKey("bench", "marketing-consumer"), "marketing.email",
+			new AccessPurposeKey("bench", "billing-consumer"), "billing");
 	private final Map<IntendedPurposeScope, String> intendedPurpose = Map.of(
 			new IntendedPurposeScope("user-1234", "quickstart-events", "marketing.email"), ".country == \"DE\"",
 			new IntendedPurposeScope("user-6789", "quickstart-events", "billing"), ".country == \"PL\""
 	);
+
+	private record AccessPurposeKey(String clientId, String topicName) { }
 	private final Set<String> topicNamesToExcludeFromPBAC = Collections.synchronizedSet(new HashSet<>(List.of("reservations")));
 
 	private final PurposeStore purposeStore;
@@ -43,10 +45,10 @@ public class Purposes {
 
 	@SneakyThrows
 	public void makeResponsePurposeCompliant(RequestHeader requestHeader, AbstractResponse response) {
-		final var declaredPurpose = declaredPurposes.get(requestHeader.clientId());
 		if (response.data() instanceof FetchResponseData fetchResponseData) {
 			for (final var fetchableTopicResponse : fetchResponseData.responses()) {
 				final var topicName = fetchableTopicResponse.topic();
+				final var declaredPurpose = declaredPurposes.get(new AccessPurposeKey(requestHeader.clientId(), topicName));
 				if (!topicNamesToExcludeFromPBAC.contains(topicName)) {
 					for (final var partition : fetchableTopicResponse.partitions()) {
 						final var records = (MemoryRecords) partition.records();
