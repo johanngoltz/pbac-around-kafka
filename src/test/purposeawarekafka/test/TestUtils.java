@@ -1,4 +1,4 @@
-package purposeawarekafka;
+package purposeawarekafka.test;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -17,9 +17,9 @@ import org.jetbrains.annotations.NotNull;
 import org.springframework.kafka.support.serializer.JsonSerde;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.testcontainers.containers.DockerComposeContainer;
+import purposeawarekafka.MessageForDemo;
 
 import java.time.Instant;
-import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -68,8 +68,7 @@ public class TestUtils {
 	@NotNull Thread produce(DockerComposeContainer compose, String topicName, Stream<MessageForDemo> messages,
 	                        List<Instant> sendInstants) {
 		return new Thread(() -> {
-			final var producerConfig = new Properties();
-			producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, getProxyHost(compose));
+			final Properties producerConfig = getProducerConfig(compose);
 
 			try (final var producer = new KafkaProducer<String, MessageForDemo>(producerConfig,
 					new JsonSerializer<>(),
@@ -87,5 +86,13 @@ public class TestUtils {
 				producer.flush();
 			}
 		});
+	}
+
+	@NotNull
+	private Properties getProducerConfig(DockerComposeContainer compose) {
+		final var producerConfig = new Properties();
+		producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, getProxyHost(compose));
+		producerConfig.put(ProducerConfig.CLIENT_ID_CONFIG, "the-client");
+		return producerConfig;
 	}
 }
