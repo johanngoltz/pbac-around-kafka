@@ -1,8 +1,7 @@
 package purposeawarekafka;
 
-import lombok.SneakyThrows;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -10,17 +9,23 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.springframework.kafka.support.serializer.JsonDeserializer;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.springframework.kafka.support.serializer.JsonSerde;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.function.Function;
 
 public class PurposeStore implements Runnable {
-	private final GlobalKTable<String, IntendedPurposeDeclaration> table;
+	private final GlobalKTable<IntendedPurposeReservationKey, IntendedPurposeReservationValue> ipTable;
+	private final GlobalKTable<AccessPurposeDeclarationKey, AccessPurposeDeclarationValue> apTable;
 	private final KafkaStreams streams;
+	private final JsonSerializer<IntendedPurposeReservationKey> jsonSerializer = new JsonSerializer<>();
 
 	public PurposeStore() {
 		final var props = new Properties();
@@ -31,29 +36,87 @@ public class PurposeStore implements Runnable {
 
 		final var builder = new StreamsBuilder();
 
-		this.table = builder.globalTable("reservations",
-				Consumed.with(Serdes.String(), Serdes.serdeFrom(new JsonSerializer<>(),
-						new JsonDeserializer<>(IntendedPurposeDeclaration.class))),
-				Materialized.as("reservations-store"));
+		this.ipTable = builder.globalTable("ip-reservations",
+				Consumed.with(
+						new JsonSerde<>(IntendedPurposeReservationKey.class).ignoreTypeHeaders(),
+						new JsonSerde<>(IntendedPurposeReservationValue.class)),
+				Materialized.as("ip-reservations-store"));
+		this.apTable = builder.globalTable("ap-declarations",
+				Consumed.with(
+						new JsonSerde<>(AccessPurposeDeclarationKey.class).ignoreTypeHeaders(),
+						new JsonSerde<>(AccessPurposeDeclarationValue.class)),
+				Materialized.as("ap-reservations-store"));
 
 		final var topology = builder.build();
 		this.streams = new KafkaStreams(topology, props);
 	}
 
-	public Collection<IntendedPurposeDeclaration> getIntendendedPurposes(String topic, String scope) {
-		if (List.of("user-1", "user-12", "user-65", "user-70").contains(scope)) {
-			return List.of(new IntendedPurposeDeclaration(scope, topic, "some-purpose", ".country != \"DE\""));
-		} else return Collections.emptyList();
+	public Optional<IntendedPurposeReservation> getIntendedPurposes(
+			Uuid topicId,
+			Function<IntendedPurposeReservationKey, Optional<String>> extractUserId) {
+		final var store = streams.store(StoreQueryParameters.fromNameAndType(
+				ipTable.queryableStoreName(),
+				QueryableStoreTypes.<IntendedPurposeReservationKey, IntendedPurposeReservationValue>keyValueStore()));
 
-		/*
-		final var result = new ArrayList<IntendedPurposeDeclaration>();
-		final var store = streams.store(
-				StoreQueryParameters.fromNameAndType(
-						table.queryableStoreName(),
-						QueryableStoreTypes.<String, IntendedPurposeDeclaration>keyValueStore()));
-		store.prefixScan(topic + "$" + scope + "$", new StringSerializer()).forEachRemaining(pair -> result.add(pair
-		.value));
-		return result;*/
+		var scanner = store.prefixScan(
+				new IntendedPurposeReservationKey("", "", topicId.toString()),
+				(topic, data) -> "{\"topic\":\"%s\"".formatted(topicId).getBytes(StandardCharsets.UTF_8));
+		try {
+			while (scanner.hasNext()) {
+				final var nextKey = scanner.peekNextKey();
+				scanner.close();
+
+				// The extractor may or may not be applicable to the message
+				final var maybeUserId = extractUserId.apply(nextKey);
+
+				if (maybeUserId.isPresent()) {
+					// The extractor is applicable. We know the ID of the affected user.
+					// If the user made a reservation for this topic with the same extractor, return it.
+					return maybeGetExactReservation(store, nextKey, maybeUserId);
+				} else {
+					// Extractor is not applicable - move to next extractor
+					// Figure out how to do this with prefixScan or range / reverseRange
+					throw new RuntimeException("User ID extractor " + nextKey.userIdExtractor() + " was not applicable" +
+							" to message.");
+				}
+			}
+
+			return Optional.empty();
+		} finally {
+			scanner.close();
+		}
+	}
+
+	private KeyValueIterator<IntendedPurposeReservationKey, IntendedPurposeReservationValue> scanFromNextUserIdExtractor(ReadOnlyKeyValueStore<IntendedPurposeReservationKey, IntendedPurposeReservationValue> store, IntendedPurposeReservationKey nextKey) {
+		KeyValueIterator<IntendedPurposeReservationKey, IntendedPurposeReservationValue> scanner;
+		final var nextExtractor = nextKey.userIdExtractor() + "\u0001";
+		scanner = store.prefixScan(
+				new IntendedPurposeReservationKey("", nextExtractor, nextKey.topic()),
+				jsonSerializer);
+		return scanner;
+	}
+
+	private Optional<IntendedPurposeReservation> maybeGetExactReservation(ReadOnlyKeyValueStore<IntendedPurposeReservationKey,
+			IntendedPurposeReservationValue> store, IntendedPurposeReservationKey nextKey,
+	                                                                      Optional<String> maybeUserId) {
+		final var userId = maybeUserId.get();
+		final var applicableReservationKey = new IntendedPurposeReservationKey(
+				userId,
+				nextKey.userIdExtractor(),
+				nextKey.topic());
+		final var reservation = store.get(applicableReservationKey);
+		if (reservation == null)
+			return Optional.empty();
+		return Optional.of(IntendedPurposeReservation.fromKeyValue(applicableReservationKey, reservation));
+	}
+
+	public Optional<AccessPurposeDeclaration> getAccessPurpose(AccessPurposeDeclarationKey key) {
+		final var store = streams.store(StoreQueryParameters.fromNameAndType(
+				apTable.queryableStoreName(),
+				QueryableStoreTypes.<AccessPurposeDeclarationKey, AccessPurposeDeclarationValue>keyValueStore()));
+		final var value = store.get(key);
+		if (value != null) return Optional.of(AccessPurposeDeclaration.fromKeyValue(key, value));
+		else return Optional.empty();
 	}
 
 	@Override

@@ -1,7 +1,8 @@
 package purposeawarekafka.test;
 
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -11,21 +12,17 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.springframework.kafka.support.serializer.JsonSerde;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.testcontainers.containers.DockerComposeContainer;
 import org.testcontainers.containers.wait.strategy.LogMessageWaitStrategy;
-import purposeawarekafka.AccessPurposeDeclaration;
-import purposeawarekafka.IntendedPurposeReservation;
-import purposeawarekafka.MessageForDemo;
+import purposeawarekafka.*;
 
 import java.io.File;
-import java.util.Date;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.UUID;
+import java.time.Duration;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Stream;
 
@@ -51,7 +48,8 @@ public class IntegrationTest {
 		final var newTopicName = "integrationTest." + UUID.randomUUID();
 		final var newTopic = new NewTopic(newTopicName, Optional.empty(), Optional.empty());
 
-		final AdminClient adminClient = testUtils.doCreateTopic(newTopic);
+		final var adminClient = testUtils.createAdminClient();
+		testUtils.doCreateTopic(newTopic, adminClient);
 
 		final var existingTopics = adminClient.listTopics().names().get(10, SECONDS);
 
@@ -60,7 +58,8 @@ public class IntegrationTest {
 
 	@Test
 	public void passMessageNoIntendedPurposes() throws Exception {
-		testUtils.doCreateTopic(new NewTopic(TOPIC_NAME, Optional.empty(), Optional.empty()));
+		testUtils.doCreateTopic(new NewTopic(TOPIC_NAME, Optional.empty(), Optional.empty()),
+				testUtils.createAdminClient());
 
 		final var latch = new CountDownLatch(10);
 
@@ -76,18 +75,79 @@ public class IntegrationTest {
 
 	@Test
 	public void passMessageAllowedByIntendedPurposes() throws Exception {
-		testUtils.doCreateTopic(new NewTopic(TOPIC_NAME, Optional.empty(), Optional.empty()));
-
-
-		final var consumer = new ConsumingAgent(TOPIC_NAME);
-		consumer.declareAccessPurpose(new AccessPurposeDeclaration(TOPIC_NAME, "billing"));
+		final var adminClient = testUtils.createAdminClient();
+		final var topicId = testUtils.doCreateTopic(
+				new NewTopic(TOPIC_NAME, Optional.empty(), Optional.empty()), adminClient);
 
 		final var producer = new ProducingAgent(TOPIC_NAME);
-		//producer.reserveIntendedPurpose(new IntendedPurposeDeclaration("user-1234", ));
+		try (final var billingConsumer = new ConsumingAgent(TOPIC_NAME, "billing-consumer");
+		     final var marketingConsumer = new ConsumingAgent(TOPIC_NAME, "marketing-consumer")) {
 
-		consumer.consume();
-		producer.produce();
+			final var billingLatch = new CountDownLatch(1);
+			final var marketingLatch = new CountDownLatch(1);
 
+			billingConsumer.declareAccessPurpose(new AccessPurposeDeclaration(TOPIC_NAME, "billing",
+					billingConsumer.clientId));
+			marketingConsumer.declareAccessPurpose(new AccessPurposeDeclaration(TOPIC_NAME, "marketing",
+					marketingConsumer.clientId));
+			producer.reserveIntendedPurpose(new IntendedPurposeReservation("user-1234", ".userId",
+					topicId.toString(),
+					Set.of("billing", "marketing"), Set.of()));
+
+			billingConsumer.consume((key, value) -> {
+				billingLatch.countDown();
+			}).start();
+			marketingConsumer.consume((key, value) -> {
+				marketingLatch.countDown();
+			}).start();
+
+			final var productionThread = producer.produce();
+			productionThread.start();
+			try {
+				assertTrue("Billing consumer should always receive messages.",
+						billingLatch.await(200, SECONDS));
+				assertTrue("Marketing consumer should receive messages while allowed by user.",
+						marketingLatch.await(200, SECONDS));
+
+				billingConsumer.close();
+				marketingConsumer.close();
+			} catch (Throwable t) {
+				t.printStackTrace();
+			} finally {
+				productionThread.interrupt();
+			}
+		}
+
+		try (final var billingConsumer = new ConsumingAgent(TOPIC_NAME, "billing-consumer");
+		     final var marketingConsumer = new ConsumingAgent(TOPIC_NAME, "marketing-consumer")) {
+			final var billingLatch = new CountDownLatch(1);
+
+			producer.reserveIntendedPurpose(new IntendedPurposeReservation("user-1234", ".userId",
+					topicId.toString(),
+					Set.of("billing"), Set.of("marketing")));
+
+			billingConsumer.consume((key, value) -> {
+				billingLatch.countDown();
+				billingConsumer.close();
+			}).start();
+			marketingConsumer.consume((key, value) -> Assert.fail(("Marketing consumer should not receive messages " +
+					"after it was forbidden, got %s:%s").formatted(key, value)));
+
+			final var productionThread = producer.produce();
+			productionThread.start();
+			try {
+				assertTrue("Billing consumer should always receive messages.",
+						billingLatch.await(200, SECONDS));
+
+				// Wait a little to make sure the record is really not received.
+				Thread.sleep(1000);
+			} catch (Throwable t) {
+				t.printStackTrace();
+			} finally {
+				productionThread.interrupt();
+			}
+
+		}
 	}
 
 	class ProducingAgent {
@@ -103,10 +163,13 @@ public class IntegrationTest {
 		}
 
 		public void reserveIntendedPurpose(IntendedPurposeReservation reservation) {
-			try (final var producer = new KafkaProducer<String, IntendedPurposeReservation>(producerConfig,
+			try (final var producer = new KafkaProducer<IntendedPurposeReservationKey,
+					IntendedPurposeReservationValue>(producerConfig,
 					new JsonSerializer<>(),
 					new JsonSerializer<>())) {
-				producer.send(new ProducerRecord<>("ip-reservations", reservation));
+				producer.send(new ProducerRecord<>("ip-reservations", reservation.getKeyForPublish(),
+						reservation.getValueForPublish()));
+				producer.flush();
 			}
 		}
 
@@ -119,54 +182,67 @@ public class IntegrationTest {
 							.forEach(date -> {
 								producer.send(new ProducerRecord<>(topicName, new MessageForDemo("user-1234", "DE",
 										date.getTime())));
+								System.out.println("Producer sent a message");
 								try {
 									Thread.sleep(1000);
-								} catch (InterruptedException e) {
-									throw new RuntimeException(e);
-								}
+								} catch (InterruptedException ignored) {}
 							});
 				}
 			});
 		}
 	}
 
-	class ConsumingAgent {
+	class ConsumingAgent implements AutoCloseable {
 		private final Properties consumerConfig, producerConfig;
 		private final String topicName;
+		final String clientId;
+		private KafkaStreams streams;
 
-		public ConsumingAgent(String topicName) {
+		public ConsumingAgent(String topicName, String clientId) {
 			this.topicName = topicName;
-
-			final var agentId = "consumer-" + UUID.randomUUID();
+			this.clientId = clientId;
 
 			final var producerConfig = new Properties();
 			producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, testUtils.getProxyHost(compose));
-			producerConfig.put(ProducerConfig.CLIENT_ID_CONFIG, agentId);
+			producerConfig.put(ProducerConfig.CLIENT_ID_CONFIG, this.clientId);
 			this.producerConfig = producerConfig;
 
 			final var consumerConfig = new Properties();
 			consumerConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, testUtils.getProxyHost(compose));
-			consumerConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, agentId);
+			consumerConfig.put(StreamsConfig.CLIENT_ID_CONFIG, this.clientId);
+			consumerConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, "integrationtest-appId-" + UUID.randomUUID());
+			consumerConfig.put(ConsumerConfig.CHECK_CRCS_CONFIG, "false");
 			this.consumerConfig = consumerConfig;
 		}
 
 		public void declareAccessPurpose(AccessPurposeDeclaration declaration) {
-			try (final var producer = new KafkaProducer<String, AccessPurposeDeclaration>(producerConfig,
-					new JsonSerializer<>(),
-					new JsonSerializer<>())) {
-				producer.send(new ProducerRecord<>("ap-declarations", declaration));
+			try (final var producer =
+					     new KafkaProducer<AccessPurposeDeclarationKey, AccessPurposeDeclarationValue>(producerConfig,
+							     new JsonSerializer<>(),
+							     new JsonSerializer<>())) {
+				producer.send(new ProducerRecord<>("ap-declarations", declaration.keyForPublish(),
+						declaration.valueForPublish()));
 			}
 		}
 
-		public void consume(ForeachAction<String, MessageForDemo> onMessage) {
+		public ConsumingAgent consume(ForeachAction<String, String> onMessage) {
 			final var builder = new StreamsBuilder();
 
-			builder.stream(topicName, Consumed.with(Serdes.String(), new JsonSerde<>(MessageForDemo.class)))
+			builder.stream(topicName, Consumed.with(Serdes.String(), Serdes.String()))
 					.peek(onMessage);
 
 			final var topology = builder.build();
 
-			new KafkaStreams(topology, consumerConfig).start();
+			this.streams = new KafkaStreams(topology, consumerConfig);
+			return this;
+		}
+
+		public void start() {
+			streams.start();
+		}
+
+		public void close() {
+			streams.close(Duration.ZERO);
 		}
 	}
 

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonParseException;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.input.CharSequenceReader;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -20,15 +21,17 @@ public class Purposes {
 	private final Collection<ApiKeys> relevantApiKeys = List.of(ApiKeys.FETCH); //ApiKeys.OFFSET_FETCH
 	private final jq jq = new jq();
 	private final Map<AccessPurposeKey, String> declaredPurposes = Map.of(
-			new AccessPurposeKey("bench", "marketing-consumer"), "marketing.email",
-			new AccessPurposeKey("bench", "billing-consumer"), "billing");
+			new AccessPurposeKey("marketing-consumer", "bench"), "marketing.email",
+			new AccessPurposeKey("billing-consumer", "bench"), "billing");
 	private final Map<IntendedPurposeScope, String> intendedPurpose = Map.of(
 			new IntendedPurposeScope("user-1234", "quickstart-events", "marketing.email"), ".country == \"DE\"",
 			new IntendedPurposeScope("user-6789", "quickstart-events", "billing"), ".country == \"PL\""
 	);
 
-	private record AccessPurposeKey(String clientId, String topicName) { }
-	private final Set<String> topicNamesToExcludeFromPBAC = Collections.synchronizedSet(new HashSet<>(List.of("reservations")));
+	private record AccessPurposeKey(String clientId, String topicName) {}
+
+	private final Set<String> topicNamesToExcludeFromPBAC = Collections.synchronizedSet(
+			new HashSet<>(List.of("reservations")));
 
 	private final PurposeStore purposeStore;
 
@@ -45,49 +48,75 @@ public class Purposes {
 
 	@SneakyThrows
 	public void makeResponsePurposeCompliant(RequestHeader requestHeader, AbstractResponse response) {
-		if (response.data() instanceof FetchResponseData fetchResponseData) {
-			for (final var fetchableTopicResponse : fetchResponseData.responses()) {
-				final var topicName = fetchableTopicResponse.topic();
-				final var declaredPurpose = declaredPurposes.get(new AccessPurposeKey(requestHeader.clientId(), topicName));
-				if (!topicNamesToExcludeFromPBAC.contains(topicName)) {
-					for (final var partition : fetchableTopicResponse.partitions()) {
-						final var records = (MemoryRecords) partition.records();
-						for (Record record : records.records()) {
-							makeRecordCompliant(declaredPurpose, topicName, record);
+		if (!isRequestExemptFromPbac(requestHeader)) {
+			if (response.data() instanceof FetchResponseData fetchResponseData) {
+				for (final var fetchableTopicResponse : fetchResponseData.responses()) {
+					final var topicId = fetchableTopicResponse.topicId();
+					final var declaredPurpose =
+							purposeStore.getAccessPurpose(new AccessPurposeDeclarationKey(
+									topicId.toString(), requestHeader.clientId()));
+					if (declaredPurpose.isPresent())
+						for (final var partition : fetchableTopicResponse.partitions()) {
+							final var records = (MemoryRecords) partition.records();
+							for (Record record : records.records()) {
+								makeRecordCompliant(declaredPurpose.get().accessPurpose(), topicId, record);
+							}
 						}
-					}
 				}
+			} else {
+				throw new UnsupportedOperationException(response.getClass().getName() + " is not an instance of " +
+						"FetchResponseData. Cannot apply PBAC.");
 			}
-		} else {
-			throw new UnsupportedOperationException(response.getClass().getName() + " is not an instance of FetchResponseData. Cannot apply PBAC.");
 		}
 	}
 
-	private void makeRecordCompliant(String declaredPurpose, String topic, Record record) throws IOException {
+	private boolean isRequestExemptFromPbac(RequestHeader requestHeader) {
+		return requestHeader.clientId().startsWith("pbac");
+	}
+
+	private void makeRecordCompliant(String declaredPurpose, Uuid topicId, Record record) throws IOException {
 		final var buffer = record.value();
 		buffer.mark();
+
 		final var reader = new CharSequenceReader(StandardCharsets.UTF_8.newDecoder().decode(buffer));
 
-		var isCompliant = false;
-		try {
-			final var scope = jq.evaluate(".userId", reader).asText();
-			reader.reset();
-			final var intendedPurposes = purposeStore.getIntendendedPurposes(topic, scope);
-			if (intendedPurposes.isEmpty()) {
-				isCompliant = true;
-			} else {
-				final var jqFilter = intendedPurposes.iterator().next().condition();
-				// log.info("Evaluating " + jqFilter);
-				isCompliant = jq.evaluateToBool(jqFilter, reader);
-			}
-		} catch (JsonParseException e) {
-			e.printStackTrace();
-		}
+		final var isCompliant = isRecordCompliant(declaredPurpose, topicId, reader);
+
+		buffer.reset();
 		if (!isCompliant) {
-			buffer.reset();
 			while (buffer.hasRemaining())
 				buffer.put((byte) '-');
 			buffer.rewind();
 		}
+	}
+
+	private boolean isRecordCompliant(String declaredPurpose, Uuid topicId, CharSequenceReader reader) {
+		final var maybeReservation = purposeStore.getIntendedPurposes(
+				topicId,
+				reservationKey -> maybeGetUserId(reader, reservationKey));
+
+		if (maybeReservation.isEmpty()) {
+			return true;
+		} else {
+			final var reservation = maybeReservation.get();
+			return reservation.allowed().contains(declaredPurpose) &&
+					!reservation.prohibited().contains(declaredPurpose);
+		}
+
+	}
+
+	private Optional<String> maybeGetUserId(CharSequenceReader reader, IntendedPurposeReservationKey reservationKey) {
+		String userId = null;
+		try {
+			userId = jq.evaluate(reservationKey.userIdExtractor(), reader).asText();
+		} catch (JsonParseException e) {
+			if (log.isTraceEnabled())
+				log.trace("Could not evaluate " + reservationKey.userIdExtractor() + " on " + reader);
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		} finally {
+			reader.reset();
+		}
+		return Optional.ofNullable(userId);
 	}
 }

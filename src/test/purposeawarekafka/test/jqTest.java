@@ -1,8 +1,9 @@
-package purposeawarekafka;
+package purposeawarekafka.test;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.testcontainers.shaded.org.apache.commons.io.input.CharSequenceReader;
+import purposeawarekafka.jq;
 
 import static org.junit.Assert.*;
 

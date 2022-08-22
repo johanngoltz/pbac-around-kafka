@@ -23,6 +23,7 @@ services:
     image: us-central1-docker.pkg.dev/pbac-in-pubsub/the-repo/pbac-around-kafka:latest
     ports:
       - "9093:9093"
+      - "5005:5005"
     environment:
       - PBAC_KAFKA_HOST=kafka
       - PBAC_KAFKA_PORT=9092

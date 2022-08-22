@@ -7,6 +7,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -31,16 +32,18 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 public class TestUtils {
 	public TestUtils() {}
 
-	@NotNull AdminClient doCreateTopic(NewTopic newTopic) throws InterruptedException, ExecutionException,
+	Uuid doCreateTopic(NewTopic newTopic, AdminClient adminClient) throws InterruptedException, ExecutionException,
 			TimeoutException {
+		final var createTopics = adminClient.createTopics(List.of(newTopic));
+
+		return createTopics.topicId(newTopic.name()).get(10, SECONDS);
+	}
+
+	AdminClient createAdminClient() {
 		final var adminClientConfig = new Properties();
 		adminClientConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9093");
 
 		final var adminClient = KafkaAdminClient.create(adminClientConfig);
-
-		final var createTopics = adminClient.createTopics(List.of(newTopic));
-
-		createTopics.all().get(10, SECONDS);
 		return adminClient;
 	}
 
