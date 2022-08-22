@@ -1,0 +1,30 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+participant KafkaRequestHandler
+participant KafkaApis << ApiRequestHandler >>
+participant FetchContext
+participant RequestChannel
+
+KafkaRequestHandler ++
+KafkaRequestHandler -> RequestChannel ++: receiveRequest()
+RequestChannel --> KafkaRequestHandler --: Parsed Request
+KafkaRequestHandler -> KafkaApis ++: handle()
+
+KafkaApis -> FetchContext **: updateAndGenerateResponseData()
+FetchContext ++
+KafkaApis <-- FetchContext: Requested Topic Data
+destroy FetchContext
+
+KafkaApis -> RequestChannel ++: sendResponse()
+RequestChannel --> KafkaApis: Response Enqueued
+
+KafkaApis --> KafkaRequestHandler --: Handled
+KafkaRequestHandler --
+
+RequestChannel ->]: Respond to Client
+]--> RequestChannel: Acknowledge
+
+@enduml

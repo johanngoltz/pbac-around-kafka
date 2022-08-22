@@ -1,0 +1,35 @@
+@startuml
+
+autonumber
+
+skinparam {
+    Padding None
+    responseMessageBelowArrow true
+}
+
+participant FilteringHandler order 50
+participant Purposes order 80
+participant ProxyToBrokerRequestThread << InterBrokerSendThread >> order 40
+participant RequestChannel order 100
+
+ProxyToBrokerRequestThread ++
+
+ProxyToBrokerRequestThread ->]: Forward to Broker
+]--> ProxyToBrokerRequestThread: Parsed Response
+
+ProxyToBrokerRequestThread -> FilteringHandler ++: onComplete()
+alt Was FETCH request
+FilteringHandler -> Purposes ++: makeResponsePurposeCompliant()
+Purposes --> FilteringHandler --: Purpose-Compliant Response
+end
+FilteringHandler -> RequestChannel ++: sendResponse()
+RequestChannel --> FilteringHandler: Enqueued
+FilteringHandler --> ProxyToBrokerRequestThread --
+RequestChannel --
+
+ProxyToBrokerRequestThread --
+
+RequestChannel ->] ++: Respond to Client
+]--> RequestChannel --: Acknowledge
+
+@enduml

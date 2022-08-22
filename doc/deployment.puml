@@ -1,0 +1,27 @@
+@startuml
+
+top to bottom direction
+
+collections Producers
+collections Consumers
+
+node Broker << Replicated >> {
+    component Kafka as "Kafka Broker" << Dockerized >> #white
+    component PBAC as "PBAC Proxy" << Dockerized >> {
+        artifact KafkaLib as "kafka"
+        artifact PBACLib as "pbac"
+        PBACLib <-> KafkaLib
+    }
+
+    Kafka -(0- PBAC : Forward
+}
+
+PBAC -(0- Consumers : Consume
+PBAC -(0- Producers : Produce
+Kafka -(0~ Consumers : Bootstrap
+Kafka -(0~ Producers : Bootstrap
+
+node Zookeeper
+Kafka -(0- Zookeeper: Coordinate
+
+@enduml

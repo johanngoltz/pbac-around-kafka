@@ -1,0 +1,27 @@
+@startuml
+
+autonumber
+
+skinparam {
+    Padding None
+    responseMessageBelowArrow true
+}
+
+participant KafkaRequestHandler order 10
+participant ForwardingApiRequestHandler << ApiRequestHandler >> order 20
+participant ProxyToBrokerRequestThread << InterBrokerSendThread >> order 40
+participant ProxyToBrokerChannelManager order 30
+participant RequestChannel order 100
+
+KafkaRequestHandler ++
+KafkaRequestHandler -> RequestChannel ++: receiveRequest()
+RequestChannel --> KafkaRequestHandler --: Parsed Request
+KafkaRequestHandler -> ForwardingApiRequestHandler ++: handle()
+ForwardingApiRequestHandler -> ProxyToBrokerChannelManager ++: sendRequest()
+ProxyToBrokerChannelManager -> ProxyToBrokerRequestThread ++: enqueue()
+ProxyToBrokerRequestThread --> ProxyToBrokerChannelManager: Enqueued
+ProxyToBrokerChannelManager --> ForwardingApiRequestHandler --
+ForwardingApiRequestHandler --> KafkaRequestHandler --: Handled
+KafkaRequestHandler --
+
+@enduml
