@@ -2,7 +2,6 @@ package purposeawarekafka.test;
 
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -31,8 +30,6 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertTrue;
 
 public class IntegrationTest {
-	public static final String TOPIC_NAME = "quickstart-events";
-
 	@ClassRule
 	public static DockerComposeContainer compose =
 			new DockerComposeContainer(
@@ -43,6 +40,9 @@ public class IntegrationTest {
 							new LogMessageWaitStrategy().withRegEx(".*to RUNNING.*").withStartupTimeout(ofSeconds(180)));
 	private final TestUtils testUtils = new TestUtils();
 
+	/** Tests that message types PBAC should not be applied to are always forwarded.
+	 * @throws Exception
+	 */
 	@Test
 	public void createTopic() throws Exception {
 		final var newTopicName = "integrationTest." + UUID.randomUUID();
@@ -56,25 +56,15 @@ public class IntegrationTest {
 		assertTrue(existingTopics.contains(newTopicName));
 	}
 
+	/** Tests application of basic AIP / PIP with one producer and two consumers.
+	 * In the first part, both consumers declare AP that in the AIP set reserved by the producer.
+	 * In the second part, the producer reserves new IPs that exclude one of the consumers.
+	 * @throws Exception
+	 */
 	@Test
-	public void passMessageNoIntendedPurposes() throws Exception {
-		testUtils.doCreateTopic(new NewTopic(TOPIC_NAME, Optional.empty(), Optional.empty()),
-				testUtils.createAdminClient());
+	public void respectChangedIntendedPurposes() throws Exception {
+		final var TOPIC_NAME = "respect-changed-intended-purposes";
 
-		final var latch = new CountDownLatch(10);
-
-		testUtils.consume(compose, TOPIC_NAME, (key, value) -> latch.countDown()).start();
-		testUtils.produce(compose, TOPIC_NAME, Stream
-								.generate(() -> new MessageForDemo("user-" + UUID.randomUUID(), "DE", 12.5f))
-								.limit(10),
-						null)
-				.start();
-
-		assertTrue(latch.await(100, SECONDS));
-	}
-
-	@Test
-	public void passMessageAllowedByIntendedPurposes() throws Exception {
 		final var adminClient = testUtils.createAdminClient();
 		final var topicId = testUtils.doCreateTopic(
 				new NewTopic(TOPIC_NAME, Optional.empty(), Optional.empty()), adminClient);
