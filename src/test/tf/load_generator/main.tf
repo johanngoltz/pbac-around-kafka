@@ -14,12 +14,20 @@ module "gce-container" {
   container = {
     image   = "us-central1-docker.pkg.dev/pbac-in-pubsub/the-repo/benchmark-load-generator:latest"
     command = [
-      var.client_type == "producer" ? "/usr/bin/run-producer-bench.sh" : "/usr/bin/run-consumer-bench.sh"
+      "/usr/bin/run-${var.client_type}-bench.sh"
     ]
     env = [
       {
         name  = "BENCHMARK_NUM_RECORDS"
         value = var.msg_count
+      },
+      {
+        name = "BENCH_NEW_RESERVATION_FREQUENCY_SECONDS"
+        value = var.new_reservation_interval
+      },
+      {
+        name = "BENCH_NUM_DUMMY_RESERVATIONS"
+        value = "100000"
       }
     ]
   }

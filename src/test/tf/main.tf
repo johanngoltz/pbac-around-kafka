@@ -54,7 +54,7 @@ resource "google_compute_firewall" "default" {
 
   allow {
     protocol = "tcp"
-    ports    = ["22", "80", "8080", "2181", "9090-9093", "29092"]
+    ports    = ["22", "80", "8080", "2181", "9090-9093", "29092", "5005"]
   }
 
   source_ranges = ["0.0.0.0/0"]
@@ -84,7 +84,7 @@ module "kafka" {
   }
 
   enable_pbac = var.enable_pbac
-  subnetwork = google_compute_subnetwork.kafka
+  subnetwork  = google_compute_subnetwork.kafka
 }
 
 module "load_generator" {
@@ -94,10 +94,11 @@ module "load_generator" {
   providers = {
     google = google
   }
-  client_count = var.client_count
-  client_type  = each.key
-  network_name = google_compute_network.default.name
-  msg_count    = var.benchmark_msgs_to_send
+  client_count             = var.client_count
+  client_type              = each.key
+  network_name             = google_compute_network.default.name
+  msg_count                = var.benchmark_msgs_to_send
+  new_reservation_interval = var.new_reservation_interval
 }
 
 resource "google_compute_instance" "controller" {

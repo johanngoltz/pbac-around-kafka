@@ -22,3 +22,8 @@ variable "benchmark_msgs_to_send" {
 variable "enable_pbac" {
   type = bool
 }
+
+variable "new_reservation_interval" {
+  type = number
+  default = 60
+}

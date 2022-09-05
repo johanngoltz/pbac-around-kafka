@@ -15,10 +15,10 @@ class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config
         time,
         metrics,
         config,
-        "ChannelName",
-        Option("Prefix"))
+        "ProxyToBroker",
+        Option("PBAC"))
     forwarder.start()
-    val clazz = if ("NONE".equals(System.getenv("PBAC_MODE"))) {
+    val clazz =  if ("NONE".equals(System.getenv("PBAC_MODE"))) {
         (request: RequestChannel.Request) => new NoopHandler(request)
     } else {
         (request: RequestChannel.Request) => new FilteringHandler(request)

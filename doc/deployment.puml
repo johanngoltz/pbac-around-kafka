@@ -22,6 +22,6 @@ Kafka -(0~ Consumers : Bootstrap
 Kafka -(0~ Producers : Bootstrap
 
 node Zookeeper
-Kafka -(0- Zookeeper: Coordinate
+Kafka -0)- Zookeeper: Coordinate
 
 @enduml

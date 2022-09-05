@@ -21,9 +21,9 @@ public class PurposeAwareKafka {
 
 	private static final Time time = Time.SYSTEM;
 
-	@SneakyThrows // todo remove
+	@SneakyThrows
 	public static void main(String[] args) {
-		final var purposeStore = new PurposeStore();
+		final var purposeStore = new PurposeStore("localhost:9093");
 		final var purposes = new Purposes(purposeStore);
 		new Thread(purposeStore).start();
 

@@ -20,26 +20,17 @@ import java.util.*;
 public class Purposes {
 	private final Collection<ApiKeys> relevantApiKeys = List.of(ApiKeys.FETCH); //ApiKeys.OFFSET_FETCH
 	private final jq jq = new jq();
-	private final Map<AccessPurposeKey, String> declaredPurposes = Map.of(
-			new AccessPurposeKey("marketing-consumer", "bench"), "marketing.email",
-			new AccessPurposeKey("billing-consumer", "bench"), "billing");
-	private final Map<IntendedPurposeScope, String> intendedPurpose = Map.of(
-			new IntendedPurposeScope("user-1234", "quickstart-events", "marketing.email"), ".country == \"DE\"",
-			new IntendedPurposeScope("user-6789", "quickstart-events", "billing"), ".country == \"PL\""
-	);
 
 	private record AccessPurposeKey(String clientId, String topicName) {}
 
-	private final Set<String> topicNamesToExcludeFromPBAC = Collections.synchronizedSet(
-			new HashSet<>(List.of("reservations")));
+	private final Set<String> topicNamesToExcludeFromPBAC = Collections.synchronizedSet(new HashSet<>(List.of(
+			"reservations")));
 
 	private final PurposeStore purposeStore;
 
 	public Purposes(PurposeStore purposeStore) {
 		this.purposeStore = purposeStore;
 	}
-
-	private final record IntendedPurposeScope(String userId, String topic, String purpose) {}
 
 
 	public boolean isRequestPurposeRelevant(RequestHeader requestHeader) {
@@ -53,15 +44,23 @@ public class Purposes {
 				for (final var fetchableTopicResponse : fetchResponseData.responses()) {
 					final var topicId = fetchableTopicResponse.topicId();
 					final var declaredPurpose =
-							purposeStore.getAccessPurpose(new AccessPurposeDeclarationKey(
-									topicId.toString(), requestHeader.clientId()));
-					if (declaredPurpose.isPresent())
+							purposeStore.getAccessPurpose(new AccessPurposeDeclarationKey(topicId.toString(),
+									requestHeader.clientId())).or(() -> {
+								final var clientIdWithoutStreamThreadSuffix = requestHeader.clientId().substring(0,
+										requestHeader.clientId().length() - 24);
+								return purposeStore.getAccessPurpose(new AccessPurposeDeclarationKey(topicId.toString(), clientIdWithoutStreamThreadSuffix));
+							});
+					if (declaredPurpose.isPresent()) {
 						for (final var partition : fetchableTopicResponse.partitions()) {
 							final var records = (MemoryRecords) partition.records();
 							for (Record record : records.records()) {
 								makeRecordCompliant(declaredPurpose.get().accessPurpose(), topicId, record);
 							}
 						}
+					} else {
+						if (log.isWarnEnabled())
+							log.warn("No AP declaration found for " + topicId + " / " + requestHeader.clientId());
+					}
 				}
 			} else {
 				throw new UnsupportedOperationException(response.getClass().getName() + " is not an instance of " +
@@ -84,23 +83,19 @@ public class Purposes {
 
 		buffer.reset();
 		if (!isCompliant) {
-			while (buffer.hasRemaining())
-				buffer.put((byte) '-');
+			while (buffer.hasRemaining()) buffer.put((byte) '-');
 			buffer.rewind();
 		}
 	}
 
 	private boolean isRecordCompliant(String declaredPurpose, Uuid topicId, CharSequenceReader reader) {
-		final var maybeReservation = purposeStore.getIntendedPurposes(
-				topicId,
-				reservationKey -> maybeGetUserId(reader, reservationKey));
+		final var maybeReservation = purposeStore.getIntendedPurposes(topicId, reservationKey -> maybeGetUserId(reader
+				, reservationKey));
 
 		if (maybeReservation.isEmpty()) {
 			return true;
 		} else {
-			final var reservation = maybeReservation.get();
-			return reservation.allowed().contains(declaredPurpose) &&
-					!reservation.prohibited().contains(declaredPurpose);
+			return maybeReservation.get().allowsPurpose(declaredPurpose);
 		}
 
 	}

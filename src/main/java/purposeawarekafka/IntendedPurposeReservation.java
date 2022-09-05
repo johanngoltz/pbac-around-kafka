@@ -14,8 +14,11 @@ public record IntendedPurposeReservation(String userId, String userIdExtractor, 
 
 	static IntendedPurposeReservation fromKeyValue(IntendedPurposeReservationKey key,
 	                                               IntendedPurposeReservationValue value) {
-		return new IntendedPurposeReservation(
-				key.userId(), key.userIdExtractor(), key.topic(),
-				value.allowed(), value.prohibited());
+		return new IntendedPurposeReservation(key.userId(), key.userIdExtractor(), key.topic(), value.allowed(),
+				value.prohibited());
+	}
+
+	public boolean allowsPurpose(String purpose) {
+		return allowed.contains(purpose) && !prohibited.contains(purpose);
 	}
 }

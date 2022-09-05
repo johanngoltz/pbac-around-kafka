@@ -11,5 +11,9 @@ variable "client_count" {
 }
 
 variable "msg_count" {
-  type    = number
+  type = number
+}
+
+variable "new_reservation_interval" {
+  type = number
 }

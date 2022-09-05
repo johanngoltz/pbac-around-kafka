@@ -1,5 +1,6 @@
 package purposeawarekafka;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -21,16 +22,19 @@ import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Function;
 
+@Slf4j
 public class PurposeStore implements Runnable {
 	private final GlobalKTable<IntendedPurposeReservationKey, IntendedPurposeReservationValue> ipTable;
 	private final GlobalKTable<AccessPurposeDeclarationKey, AccessPurposeDeclarationValue> apTable;
 	private final KafkaStreams streams;
 	private final JsonSerializer<IntendedPurposeReservationKey> jsonSerializer = new JsonSerializer<>();
 
-	public PurposeStore() {
+	public PurposeStore(String bootstrapServer) {this(bootstrapServer, null);}
+
+	public PurposeStore(String bootstrapServer, KafkaStreams.StateListener stateListener) {
 		final var props = new Properties();
 		props.put(StreamsConfig.APPLICATION_ID_CONFIG, "pbac");
-		props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9093");
+		props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
 		props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 		props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
@@ -49,6 +53,8 @@ public class PurposeStore implements Runnable {
 
 		final var topology = builder.build();
 		this.streams = new KafkaStreams(topology, props);
+		streams.cleanUp(); // mainly for testing, should not hurt in prod
+		if (stateListener != null) streams.setStateListener(stateListener);
 	}
 
 	public Optional<IntendedPurposeReservation> getIntendedPurposes(
@@ -60,7 +66,7 @@ public class PurposeStore implements Runnable {
 
 		var scanner = store.prefixScan(
 				new IntendedPurposeReservationKey("", "", topicId.toString()),
-				(topic, data) -> "{\"topic\":\"%s\"".formatted(topicId).getBytes(StandardCharsets.UTF_8));
+				(topic, data) -> "{\"topic\":\"%s\"".formatted(data.topic()).getBytes(StandardCharsets.UTF_8));
 		try {
 			while (scanner.hasNext()) {
 				final var nextKey = scanner.peekNextKey();
@@ -75,9 +81,10 @@ public class PurposeStore implements Runnable {
 					return maybeGetExactReservation(store, nextKey, maybeUserId);
 				} else {
 					// Extractor is not applicable - move to next extractor
-					// Figure out how to do this with prefixScan or range / reverseRange
-					throw new RuntimeException("User ID extractor " + nextKey.userIdExtractor() + " was not applicable" +
-							" to message.");
+					final var userIdExtractorPlusOne = nextKey.userIdExtractor() + (char) ((byte) '"' + 1);
+					final var nextKeyPlusOne = new IntendedPurposeReservationKey("",
+							userIdExtractorPlusOne, nextKey.topic());
+					scanner = store.range(nextKeyPlusOne, null);
 				}
 			}
 
@@ -85,15 +92,6 @@ public class PurposeStore implements Runnable {
 		} finally {
 			scanner.close();
 		}
-	}
-
-	private KeyValueIterator<IntendedPurposeReservationKey, IntendedPurposeReservationValue> scanFromNextUserIdExtractor(ReadOnlyKeyValueStore<IntendedPurposeReservationKey, IntendedPurposeReservationValue> store, IntendedPurposeReservationKey nextKey) {
-		KeyValueIterator<IntendedPurposeReservationKey, IntendedPurposeReservationValue> scanner;
-		final var nextExtractor = nextKey.userIdExtractor() + "\u0001";
-		scanner = store.prefixScan(
-				new IntendedPurposeReservationKey("", nextExtractor, nextKey.topic()),
-				jsonSerializer);
-		return scanner;
 	}
 
 	private Optional<IntendedPurposeReservation> maybeGetExactReservation(ReadOnlyKeyValueStore<IntendedPurposeReservationKey,
@@ -116,7 +114,9 @@ public class PurposeStore implements Runnable {
 				QueryableStoreTypes.<AccessPurposeDeclarationKey, AccessPurposeDeclarationValue>keyValueStore()));
 		final var value = store.get(key);
 		if (value != null) return Optional.of(AccessPurposeDeclaration.fromKeyValue(key, value));
-		else return Optional.empty();
+		else {
+			return Optional.empty();
+		}
 	}
 
 	@Override
@@ -133,7 +133,6 @@ public class PurposeStore implements Runnable {
 		});
 
 		try {
-			Thread.sleep(Duration.ofMinutes(2).toMillis());
 			streams.start();
 			latch.await();
 		} catch (Throwable e) {

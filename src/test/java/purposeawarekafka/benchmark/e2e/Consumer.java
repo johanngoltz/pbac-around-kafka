@@ -1,6 +1,8 @@
 package purposeawarekafka.benchmark.e2e;
 
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.tuple.Pair;
+import org.apache.commons.lang3.tuple.Triple;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -21,7 +23,9 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.util.*;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class Consumer implements Runnable {
 	public final String purpose;
@@ -29,7 +33,7 @@ public class Consumer implements Runnable {
 	private final Uuid topicId;
 	private final KafkaStreams streams;
 	private final List<MessageReceived> messagesReceived = Collections.synchronizedList(new ArrayList<>());
-	public final Map<UUID, Long> receiveTimestamps = Collections.synchronizedMap(new HashMap<>());
+	public final Queue<Triple<UUID, Long, Boolean>> receiveTimestamps = new LinkedBlockingQueue<>();
 	private String bootstrapServer;
 
 	public static void main(String[] args) throws ExecutionException, InterruptedException, IOException {
@@ -72,12 +76,13 @@ public class Consumer implements Runnable {
 		consumerConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, "benchmark-app-" + UUID.randomUUID());
 		consumerConfig.put(ConsumerConfig.CHECK_CRCS_CONFIG, "false");
 
+
 		final var builder = new StreamsBuilder();
 
-		builder.stream(topicName, Consumed.with(Serdes.String(), Serdes.String())).peek((key, value) -> {
+		builder.stream(topicName, Consumed.with(Serdes.UUID(), Serdes.String())).peek((key, value) -> {
 			// messagesReceived.add(new MessageReceived(System.currentTimeMillis(), null));
-			final var messageId = UUID.fromString(value.substring(value.length() - 38, value.length() - 2));
-			receiveTimestamps.put(messageId, System.currentTimeMillis());
+			final var wasFiltered = value.startsWith("-");
+			receiveTimestamps.add(Triple.of(key, System.currentTimeMillis(), wasFiltered));
 		});
 
 		final var topology = builder.build();

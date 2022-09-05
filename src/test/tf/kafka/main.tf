@@ -109,7 +109,9 @@ resource "google_compute_instance" "kafka" {
   network_interface {
     subnetwork = var.subnetwork.name
     network_ip = local.kafka_hosts[count.index]
-    # access_config {}
+    access_config {
+      network_tier = "STANDARD"
+    }
   }
 
   tags = ["kafka-broker", "benchmark"]
@@ -134,7 +136,7 @@ resource "google_compute_instance" "kafka" {
           [Service]
           Type=oneshot
           RemainAfterExit=true
-          ExecStart=/sbin/iptables -A INPUT -p tcp --match multiport --dports 9092,9093,29092 -j ACCEPT
+          ExecStart=/sbin/iptables -A INPUT -p tcp --match multiport --dports 9092,9093,29092,5005 -j ACCEPT
       - path: /etc/systemd/system/kafka.service
         permissions: 0644
         owner: root

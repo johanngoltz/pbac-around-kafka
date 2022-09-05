@@ -1,9 +1,12 @@
 package purposeawarekafka.benchmark.e2e;
 
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.tuple.MutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.jetbrains.annotations.NotNull;
@@ -18,6 +21,8 @@ import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.stream.Stream;
 
 import static java.util.Objects.requireNonNull;
@@ -26,7 +31,9 @@ public class Producer implements Runnable {
 	private final KafkaProducer<String, String> appProducer;
 	private final KafkaProducer<IntendedPurposeReservationKey, IntendedPurposeReservationValue> ipProducer;
 
-	private final List<String> userIds = Stream.generate(() -> "user-" + UUID.randomUUID()).limit(5).toList();
+	// cannot use more than 1 user because resultreporter cannot determine applicable reservation at queue time
+	// otherwise
+	private final List<String> userIds = Stream.generate(() -> "user-" + UUID.randomUUID()).limit(1).toList();
 
 	private final Map<String, IntendedPurposeReservation> reservations;
 
@@ -42,7 +49,8 @@ public class Producer implements Runnable {
 	public SortedMap<Long, IntendedPurposeReservation> ipPublished = Collections.unmodifiableSortedMap(_ipPublished);
 	private final List<MessagePublished> messagesPublished = new ArrayList<>();
 
-	public final Map<UUID, Long> sendTimestamps = Collections.synchronizedMap(new HashMap<>());
+	public final Map<UUID, Pair<Long, Byte>> sendTimestamps = Collections.synchronizedMap(new HashMap<>());
+	private long newReservationFrequencyMillis;
 
 	public static void main(String[] args) throws Exception {
 		final var bootstrapHost = System.getenv("BENCH_KAFKA_HOST");
@@ -50,8 +58,13 @@ public class Producer implements Runnable {
 		final var topic = System.getenv("BENCH_TOPIC");
 		final var purposes = Set.copyOf(List.of(System.getenv("BENCH_PURPOSES").split(",")));
 		final var hostName = Optional.ofNullable(System.getenv("HOSTNAME")).orElse(System.getenv("COMPUTERNAME"));
+		final var numDummyReservationsToMake = Integer.parseInt(System.getenv("BENCH_NUM_DUMMY_RESERVATIONS"));
+		final var newReservationFrequency = Duration.ofSeconds(Integer.parseInt(System.getenv(
+				"BENCH_NEW_RESERVATION_FREQUENCY_SECONDS")));
 
-		final var instance = new Producer("%s:%s".formatted(bootstrapHost, bootstrapPort), topic, purposes, hostName);
+
+		final var instance = new Producer("%s:%s".formatted(bootstrapHost, bootstrapPort), topic, purposes, hostName,
+				numDummyReservationsToMake, newReservationFrequency);
 
 		final var t = new Thread(instance);
 		try (final var controlSocket = new ServerSocket(8080)) {
@@ -70,10 +83,13 @@ public class Producer implements Runnable {
 		}
 	}
 
-	public Producer(String bootstrapServer, String topicName, Set<String> purposes, String benchmarkAgentId) throws ExecutionException, InterruptedException {
+	public Producer(String bootstrapServer, String topicName, Set<String> purposes, String benchmarkAgentId,
+	                int numDummyReservationsToMake, Duration newReservationFrequency) throws ExecutionException,
+			InterruptedException {
 		this.topicName = topicName;
 		this.purposes = purposes;
 		this.benchmarkAgentId = benchmarkAgentId;
+		newReservationFrequencyMillis = newReservationFrequency.toMillis();
 
 		assert purposes.size() == 2;
 
@@ -89,15 +105,29 @@ public class Producer implements Runnable {
 
 		topicId = Util.getTopicId(bootstrapServer, topicName);
 
-		reservations = new HashMap<>();
+		reservations = makeReservations(numDummyReservationsToMake);
+	}
+
+	@NotNull
+	private Map<String, IntendedPurposeReservation> makeReservations(int numDummyReservationsToMake) {
+		final Map<String, IntendedPurposeReservation> reservations = new HashMap<>();
 		for (final var userId : userIds) {
 			reservations.put(userId, getInitialIntendedPurposeReservation(userId));
 		}
 		for (final var reservation : reservations.values()) {
-			ipProducer.send(new ProducerRecord<>("ip-reservations", reservation.getKeyForPublish(),
-					reservation.getValueForPublish()));
+			sendReservation(reservation);
 		}
+		makeDummyReservations(numDummyReservationsToMake);
+		return reservations;
+	}
 
+	private void makeDummyReservations(int numDummyReservationsToMake) {
+		Stream.generate(UUID::randomUUID).map(String::valueOf).limit(numDummyReservationsToMake).map(dummyUserId -> new IntendedPurposeReservation(dummyUserId, ".userId", topicId.toString(), Set.of(), Set.of())).forEach(this::sendReservation);
+	}
+
+	private void sendReservation(IntendedPurposeReservation reservation) {
+		ipProducer.send(new ProducerRecord<>("ip-reservations", reservation.getKeyForPublish(),
+				reservation.getValueForPublish()));
 	}
 
 	@NotNull
@@ -113,20 +143,32 @@ public class Producer implements Runnable {
 	}
 
 	public void run() {
-		try {
-			var previousReservation = 0L;
-			while (!Thread.interrupted()) {
-				if (System.currentTimeMillis() - previousReservation > 10_000) {
+		final var reservationsThread = new Thread(() -> {
+			try {
+				while (true) {
+					Thread.sleep(newReservationFrequencyMillis);
 					reserveIntendedPurpose();
-					previousReservation = System.currentTimeMillis();
-				} else {
-					publishMessage();
 				}
+			} catch (InterruptedException ignored) {
+			} finally {
+				ipProducer.close(Duration.ZERO);
 			}
+		});
+
+		try {
+			reservationsThread.start();
+			while (!Thread.interrupted()) {
+				publishMessage();
+			}
+		} catch (InterruptedException ignored) {
+		} catch (ExecutionException e) {
+			e.printStackTrace();
 		} finally {
 			reportResults();
 
-			ipProducer.close(Duration.ZERO);
+			reservationsThread.interrupt();
+
+
 			appProducer.close(Duration.ZERO);
 		}
 	}
@@ -145,7 +187,7 @@ public class Producer implements Runnable {
 				pw.println();
 			}
 		}
-
+/*
 		final var messagesSentFile = new File("msgsent-%s.csv".formatted(benchmarkAgentId));
 		try (final var pw = new PrintWriter(messagesSentFile)) {
 			pw.println("timestamp");
@@ -153,19 +195,21 @@ public class Producer implements Runnable {
 				pw.print(messagePublished.timestamp());
 				pw.println();
 			}
-		}
+		}*/
 	}
 
-	private void publishMessage() {
+	private void publishMessage() throws ExecutionException, InterruptedException {
 		final var anyUserId = randomUserId();
 		final var msgUuid = UUID.randomUUID();
 		final var message = messageTemplates.get(anyUserId).formatted(msgUuid);
-		final var record = new ProducerRecord<String, String>(topicName, message);
+		final var record = new ProducerRecord<>(topicName, random.nextInt(10), msgUuid.toString(), message);
 
+		// allow interleaved message / intended purpose publishing, but always wait for the message to be ACKed before
+		// sending the next
 		appProducer.send(record, (metadata, exception) -> {
-			sendTimestamps.put(msgUuid, metadata.timestamp());
-			messagesPublished.add(new MessagePublished(message, metadata.timestamp()));
-		});
+			if (exception == null) sendTimestamps.put(msgUuid, MutablePair.of(metadata.timestamp(), (byte) 2));
+			// messagesPublished.add(new MessagePublished(message, metadata.timestamp()));
+		}).get();
 	}
 
 	private String randomUserId() {
@@ -184,7 +228,11 @@ public class Producer implements Runnable {
 
 		final var record = new ProducerRecord<>("ip-reservations", reservation.getKeyForPublish(),
 				reservation.getValueForPublish());
-		ipProducer.send(record, (metadata, exception) -> _ipPublished.put(metadata.timestamp(), reservation));
+		ipProducer.send(record, (metadata, exception) -> {
+			_ipPublished.put(metadata.timestamp(), reservation);
+			System.out.printf("Reserved {%s|%s}%n", String.join(",", reservation.allowed()), String.join(",",
+					reservation.prohibited()));
+		});
 	}
 
 	private void movePurpose(Set<String> moveFrom, Set<String> moveTo) {
