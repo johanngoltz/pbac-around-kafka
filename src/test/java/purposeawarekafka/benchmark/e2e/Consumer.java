@@ -1,7 +1,6 @@
 package purposeawarekafka.benchmark.e2e;
 
 import lombok.SneakyThrows;
-import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.lang3.tuple.Triple;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -14,16 +13,15 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.springframework.kafka.support.serializer.JsonSerializer;
-import purposeawarekafka.AccessPurposeDeclaration;
-import purposeawarekafka.AccessPurposeDeclarationKey;
-import purposeawarekafka.AccessPurposeDeclarationValue;
+import purposeawarekafka.pbac.model.AccessPurposeDeclaration;
+import purposeawarekafka.pbac.model.AccessPurposeDeclarationKey;
+import purposeawarekafka.pbac.model.AccessPurposeDeclarationValue;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 

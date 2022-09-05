@@ -6,14 +6,13 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.kafka.support.serializer.JsonSerializer;
-import purposeawarekafka.IntendedPurposeReservation;
-import purposeawarekafka.IntendedPurposeReservationKey;
-import purposeawarekafka.IntendedPurposeReservationValue;
+import purposeawarekafka.pbac.model.IntendedPurposeReservation;
+import purposeawarekafka.pbac.model.IntendedPurposeReservationKey;
+import purposeawarekafka.pbac.model.IntendedPurposeReservationValue;
 
 import java.io.File;
 import java.io.PrintWriter;
@@ -21,8 +20,6 @@ import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
 import java.util.stream.Stream;
 
 import static java.util.Objects.requireNonNull;

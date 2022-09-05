@@ -59,7 +59,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>purposeawarekafka.PurposeAwareKafka</mainClass>
+                            <mainClass>purposeawarekafka.kafka.PurposeAwareKafka</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

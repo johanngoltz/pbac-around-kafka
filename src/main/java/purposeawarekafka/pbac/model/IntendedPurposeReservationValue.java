@@ -1,4 +1,4 @@
-package purposeawarekafka;
+package purposeawarekafka.pbac.model;
 
 import java.util.Set;
 

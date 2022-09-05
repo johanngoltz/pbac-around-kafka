@@ -3,7 +3,7 @@ package purposeawarekafka.test;
 import org.junit.Assert;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.junit.Test;
-import purposeawarekafka.IntendedPurposeReservationKey;
+import purposeawarekafka.pbac.model.IntendedPurposeReservationKey;
 
 import java.nio.charset.StandardCharsets;
 

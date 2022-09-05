@@ -1,4 +1,4 @@
-package purposeawarekafka;
+package purposeawarekafka.pbac.datasubject;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonNode;

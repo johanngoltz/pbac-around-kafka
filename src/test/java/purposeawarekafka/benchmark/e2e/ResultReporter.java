@@ -3,16 +3,13 @@ package purposeawarekafka.benchmark.e2e;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.lang3.tuple.Triple;
-import purposeawarekafka.IntendedPurposeReservation;
+import purposeawarekafka.pbac.model.IntendedPurposeReservation;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.sql.Date;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 import static java.util.Comparator.*;

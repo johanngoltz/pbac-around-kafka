@@ -1,4 +1,4 @@
-package purposeawarekafka
+package purposeawarekafka.kafka.server
 
 import kafka.network.RequestChannel
 import kafka.server._
@@ -6,8 +6,8 @@ import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import purposeawarekafka.pbac.{IdentityBuilder, Purposes}
 
 class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config: KafkaConfig, time: Time, metrics: Metrics, metadataCache: MetadataCache, purposes: Purposes) extends ApiRequestHandler with Logging {
     val requestHelper = new RequestHandlerHelper(requestChannel, QuotaFactory.instantiate(config, metrics, time, "quotaprefix"), time)
@@ -25,7 +25,7 @@ class ForwardingApiRequestHandler(val requestChannel: RequestChannel, val config
     }
 
     def forward(request: RequestChannel.Request): Unit = {
-        val newRequest = new DingsBums(request)
+        val newRequest = new IdentityBuilder(request)
         forwarder.sendRequest(newRequest, clazz(request))
     }
 

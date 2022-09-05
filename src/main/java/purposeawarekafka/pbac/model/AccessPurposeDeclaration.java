@@ -1,4 +1,4 @@
-package purposeawarekafka;
+package purposeawarekafka.pbac.model;
 
 public record AccessPurposeDeclaration(String topicName, String accessPurpose, String clientId) {
 	public AccessPurposeDeclarationKey keyForPublish() {

@@ -1,4 +1,4 @@
-package purposeawarekafka;
+package purposeawarekafka.pbac.model;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 

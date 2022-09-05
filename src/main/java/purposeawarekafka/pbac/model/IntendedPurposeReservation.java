@@ -1,4 +1,4 @@
-package purposeawarekafka;
+package purposeawarekafka.pbac.model;
 
 import java.util.Set;
 
@@ -12,8 +12,8 @@ public record IntendedPurposeReservation(String userId, String userIdExtractor, 
 		return new IntendedPurposeReservationValue(allowed, prohibited);
 	}
 
-	static IntendedPurposeReservation fromKeyValue(IntendedPurposeReservationKey key,
-	                                               IntendedPurposeReservationValue value) {
+	public static IntendedPurposeReservation fromKeyValue(IntendedPurposeReservationKey key,
+	                                                      IntendedPurposeReservationValue value) {
 		return new IntendedPurposeReservation(key.userId(), key.userIdExtractor(), key.topic(), value.allowed(),
 				value.prohibited());
 	}

@@ -12,12 +12,11 @@ import org.junit.Test;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.testcontainers.containers.DockerComposeContainer;
 import org.testcontainers.containers.wait.strategy.LogMessageWaitStrategy;
-import purposeawarekafka.IntendedPurposeReservation;
-import purposeawarekafka.IntendedPurposeReservationKey;
-import purposeawarekafka.IntendedPurposeReservationValue;
-import purposeawarekafka.PurposeStore;
+import purposeawarekafka.pbac.model.IntendedPurposeReservation;
+import purposeawarekafka.pbac.model.IntendedPurposeReservationKey;
+import purposeawarekafka.pbac.model.IntendedPurposeReservationValue;
+import purposeawarekafka.pbac.PurposeStore;
 
-import javax.swing.text.html.Option;
 import java.io.File;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;

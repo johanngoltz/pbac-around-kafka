@@ -1,8 +1,8 @@
-package purposeawarekafka
+package purposeawarekafka.kafka.server
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
-import kafka.server.{BrokerToControllerQueueItem, BrokerToControllerRequestThread, ControllerNodeProvider, KafkaConfig}
-import org.apache.kafka.clients.{ClientResponse, KafkaClient, ManualMetadataUpdater}
+import kafka.server.{BrokerToControllerQueueItem, KafkaConfig}
+import org.apache.kafka.clients.{ClientResponse, KafkaClient}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.utils.Time
 

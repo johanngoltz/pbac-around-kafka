@@ -1,4 +1,4 @@
-package purposeawarekafka;
+package purposeawarekafka.kafka;
 
 import kafka.Kafka;
 import kafka.security.CredentialProvider;
@@ -12,6 +12,9 @@ import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.Time;
+import purposeawarekafka.kafka.server.ForwardingApiRequestHandler;
+import purposeawarekafka.pbac.PurposeStore;
+import purposeawarekafka.pbac.Purposes;
 import scala.Option;
 import scala.collection.Map$;
 

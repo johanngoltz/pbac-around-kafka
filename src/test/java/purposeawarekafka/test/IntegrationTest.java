@@ -17,7 +17,7 @@ import org.junit.Test;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.testcontainers.containers.DockerComposeContainer;
 import org.testcontainers.containers.wait.strategy.LogMessageWaitStrategy;
-import purposeawarekafka.*;
+import purposeawarekafka.pbac.model.*;
 
 import java.io.File;
 import java.time.Duration;

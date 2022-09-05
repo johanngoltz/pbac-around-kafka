@@ -1,4 +1,4 @@
-package purposeawarekafka;
+package purposeawarekafka.pbac;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import lombok.SneakyThrows;
@@ -11,6 +11,9 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import purposeawarekafka.pbac.datasubject.jq;
+import purposeawarekafka.pbac.model.AccessPurposeDeclarationKey;
+import purposeawarekafka.pbac.model.IntendedPurposeReservationKey;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -19,9 +22,7 @@ import java.util.*;
 @Slf4j
 public class Purposes {
 	private final Collection<ApiKeys> relevantApiKeys = List.of(ApiKeys.FETCH); //ApiKeys.OFFSET_FETCH
-	private final jq jq = new jq();
-
-	private record AccessPurposeKey(String clientId, String topicName) {}
+	private final purposeawarekafka.pbac.datasubject.jq jq = new jq();
 
 	private final Set<String> topicNamesToExcludeFromPBAC = Collections.synchronizedSet(new HashSet<>(List.of(
 			"reservations")));

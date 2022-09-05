@@ -18,7 +18,7 @@ import org.jetbrains.annotations.NotNull;
 import org.springframework.kafka.support.serializer.JsonSerde;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.testcontainers.containers.DockerComposeContainer;
-import purposeawarekafka.MessageForDemo;
+import purposeawarekafka.pbac.model.MessageForDemo;
 
 import java.time.Instant;
 import java.util.List;
